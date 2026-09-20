@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.5
+          cache-dependency-path: apps/aegis-api/go.sum
+      - name: Verify formatting
+        working-directory: apps/aegis-api
+        run: test -z "$(gofmt -l .)"
+      - name: Unit and integration tests
+        working-directory: apps/aegis-api
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Vet
+        working-directory: apps/aegis-api
+        run: go vet ./...
+      - name: Static analysis
+        working-directory: apps/aegis-api
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+      - name: Vulnerability scan
+        working-directory: apps/aegis-api
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+      - name: Build
+        working-directory: apps/aegis-api
+        run: go build ./...
+      - name: Build container
+        run: docker build -f apps/aegis-api/Dockerfile -t aegis-api:ci .

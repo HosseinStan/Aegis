@@ -1,0 +1,72 @@
+name: aegis
+
+services:
+  aegis-api:
+    build:
+      context: .
+      dockerfile: apps/aegis-api/Dockerfile
+    image: aegis-api:local
+    container_name: aegis-api
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      HTTP_LISTEN_ADDRESS: :8080
+      PUBLIC_BASE_URL: ${AEGIS_PUBLIC_BASE_URL:-https://localhost:8443}
+      DATABASE_DSN: /app/data/aegis.db
+      AUTH_MODE: local_jwt
+      JWT_ISSUER: aegis-api
+      JWT_AUDIENCE: office-vue-app
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY is required}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY:?CREDENTIAL_MASTER_KEY is required}
+      SSH_KNOWN_HOSTS_FILE: /app/data/known_hosts
+      BACKUP_STORAGE_PATH: /app/data/backups
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://localhost}
+      TRUSTED_PROXY_CIDRS: 172.16.0.0/12
+      OPENAPI_SPEC_PATH: /app/openapi.yaml
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - aegis_data:/app/data
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  reverse-proxy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    environment:
+      AEGIS_HOST: ${AEGIS_HOST:-localhost}
+      AEGIS_HTTPS_PORT: ${AEGIS_HTTPS_PORT:-8443}
+    ports:
+      - "${AEGIS_HTTP_PORT:-8081}:80"
+      - "${AEGIS_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./infrastructure/reverse-proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      aegis-api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  aegis_data:
+  caddy_data:
+  caddy_config:

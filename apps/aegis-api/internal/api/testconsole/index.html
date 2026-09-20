@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aegis Evaluation Console</title>
+  <link rel="stylesheet" href="/test-console/style.css">
+</head>
+<body>
+  <header>
+    <div><span class="mark">A</span><div><strong>AEGIS</strong><small>LOCAL EVALUATION CONSOLE</small></div></div>
+    <span id="sessionStatus" class="pill offline">Signed out</span>
+  </header>
+  <main>
+    <section id="loginPanel" class="login card">
+      <p class="eyebrow">Operator sign-in</p>
+      <h1>Test the Aegis control plane</h1>
+      <p class="muted">Use the generated local administrator account. The access token stays in this browser tab only.</p>
+      <form id="loginForm">
+        <label>Username<input id="username" autocomplete="username" value="aegis-admin" required></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Sign in</button>
+      </form>
+      <p id="loginError" class="error" role="alert"></p>
+    </section>
+
+    <section id="workspace" hidden>
+      <div class="hero">
+        <div><p class="eyebrow">System overview</p><h1>Network configuration operations</h1><p id="identity" class="muted"></p></div>
+        <div class="actions"><button id="refreshAll" class="secondary">Refresh</button><button id="signOut" class="ghost">Sign out</button></div>
+      </div>
+      <div class="status-grid">
+        <article class="card status"><span>API health</span><strong id="health">Checking…</strong></article>
+        <article class="card status"><span>Database</span><strong id="readiness">Checking…</strong></article>
+        <article class="card status"><span>Devices</span><strong id="deviceCount">0</strong></article>
+        <article class="card status"><span>Credentials</span><strong id="credentialCount">0</strong></article>
+      </div>
+
+      <div id="notice" class="notice" hidden></div>
+      <div class="columns">
+        <section class="card">
+          <div class="section-head"><div><p class="eyebrow">Inventory</p><h2>Managed devices</h2></div><button id="toggleDevice" class="secondary">Add device</button></div>
+          <form id="deviceForm" class="drawer" hidden>
+            <label>Display name<input id="deviceName" required placeholder="Office core switch"></label>
+            <label>Management IP<input id="deviceIP" required placeholder="10.20.0.10"></label>
+            <div class="two"><label>Platform<select id="devicePlatform"><option value="ios-xe">Cisco IOS-XE</option><option value="ios">Cisco IOS</option></select></label><label>SSH port<input id="devicePort" type="number" value="22" min="1" max="65535"></label></div>
+            <label>Credential<select id="deviceCredential" required></select></label>
+            <label>Group<input id="deviceGroup" placeholder="head-office"></label>
+            <button type="submit">Register device</button>
+          </form>
+          <div id="devices" class="list empty">No devices registered yet.</div>
+        </section>
+
+        <section class="card">
+          <div class="section-head"><div><p class="eyebrow">Secrets vault</p><h2>SSH credentials</h2></div><button id="toggleCredential" class="secondary">Add credential</button></div>
+          <form id="credentialForm" class="drawer" hidden>
+            <label>Label<input id="credentialName" required placeholder="Read-only network account"></label>
+            <label>SSH username<input id="credentialUsername" required autocomplete="off"></label>
+            <label>SSH password<input id="credentialPassword" type="password" required autocomplete="new-password"></label>
+            <label>Enable secret (optional)<input id="enableSecret" type="password" autocomplete="new-password"></label>
+            <button type="submit">Store encrypted credential</button>
+          </form>
+          <div id="credentials" class="list empty">No device credentials stored yet.</div>
+        </section>
+      </div>
+
+      <section class="card audit-card">
+        <div class="section-head"><div><p class="eyebrow">Accountability</p><h2>Recent audit activity</h2></div></div>
+        <div id="audits" class="list empty">No audited activity yet.</div>
+      </section>
+    </section>
+  </main>
+  <template id="deviceTemplate"><article class="row device"><div><strong class="name"></strong><small class="detail"></small></div><div class="row-actions"><button data-action="test" class="secondary">Test SSH</button><button data-action="config" class="secondary">Running config</button><button data-action="backup" class="secondary">Backup</button></div></article></template>
+  <template id="credentialTemplate"><article class="row"><div><strong class="name"></strong><small class="detail"></small></div></article></template>
+  <script src="/test-console/app.js" defer></script>
+</body>
+</html>

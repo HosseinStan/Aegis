@@ -1,0 +1,12 @@
+.git
+.github
+**/.env
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/data/*
+**/backups/*
+**/coverage.out
+**/bin
+Aegis_Final_Monorepo_Codex_Spec.md
+

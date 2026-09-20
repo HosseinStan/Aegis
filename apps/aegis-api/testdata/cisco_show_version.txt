@@ -1,0 +1,4 @@
+OFFICE-SW1 uptime is 2 weeks, 3 days
+Cisco IOS XE Software, Version 17.09.04a
+cisco C9300-24T (X86) processor
+

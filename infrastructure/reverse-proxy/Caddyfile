@@ -1,0 +1,19 @@
+http://{$AEGIS_HOST:localhost} {
+    redir https://{$AEGIS_HOST:localhost}:{$AEGIS_HTTPS_PORT:8443}{uri} permanent
+}
+
+https://{$AEGIS_HOST:localhost} {
+    tls internal
+    encode zstd gzip
+    request_body {
+        max_size 6MB
+    }
+    reverse_proxy aegis-api:8080
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+}

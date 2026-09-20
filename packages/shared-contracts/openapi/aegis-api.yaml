@@ -1,0 +1,425 @@
+openapi: 3.1.0
+info:
+  title: Aegis API
+  version: 1.0.0
+  description: >-
+    Internal, read-only network configuration and device management API. The
+    API never accepts arbitrary device commands or unregistered target hosts.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+tags:
+  - name: Authentication
+  - name: Devices
+  - name: Configuration
+  - name: Backups
+  - name: Credentials
+  - name: Audit
+paths:
+  /healthz:
+    get:
+      summary: Process liveness
+      security: []
+      responses:
+        '200': {$ref: '#/components/responses/DataResponse'}
+  /readyz:
+    get:
+      summary: Database readiness
+      security: []
+      responses:
+        '200': {$ref: '#/components/responses/DataResponse'}
+        '500': {description: Dependency unavailable, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: Requires `system.manage` and should be network-restricted.
+      responses:
+        '200': {description: Prometheus exposition text, content: {text/plain: {schema: {type: string}}}}
+  /api/openapi.yaml:
+    get:
+      summary: Canonical OpenAPI contract
+      responses:
+        '200': {description: OpenAPI YAML, content: {application/yaml: {schema: {type: string}}}}
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate a local development user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/AuthResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Exchange a refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: {type: string}
+      responses:
+        '200': {$ref: '#/components/responses/AuthResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: End a client session
+      responses:
+        '204': {description: Session ended}
+  /api/v1/auth/me:
+    get:
+      tags: [Authentication]
+      summary: Return the authenticated principal
+      responses:
+        '200': {$ref: '#/components/responses/DataResponse'}
+  /api/v1/auth/docs-session:
+    post:
+      tags: [Authentication]
+      summary: Create a short-lived HTTP-only Swagger UI session
+      responses:
+        '204': {description: Documentation cookie created}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/credentials:
+    get:
+      tags: [Credentials]
+      summary: List credential metadata
+      description: Requires `credentials.manage`. Secret values are never returned.
+      parameters: [{$ref: '#/components/parameters/Limit'}, {$ref: '#/components/parameters/Offset'}]
+      responses:
+        '200': {$ref: '#/components/responses/ListResponse'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      tags: [Credentials]
+      summary: Create an encrypted device credential
+      description: Requires `credentials.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CredentialCreate'}
+      responses:
+        '201': {$ref: '#/components/responses/DataResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+  /api/v1/credentials/{credentialID}:
+    delete:
+      tags: [Credentials]
+      summary: Delete an unused credential
+      description: Requires `credentials.manage`.
+      parameters: [{$ref: '#/components/parameters/CredentialID'}]
+      responses:
+        '204': {description: Credential deleted}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices:
+    get:
+      tags: [Devices]
+      summary: List devices visible to the principal
+      description: Requires `devices.read`; device-group restrictions are applied.
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Offset'}
+        - {name: enabled, in: query, schema: {type: boolean}}
+        - {name: group, in: query, schema: {type: string}}
+        - {name: search, in: query, schema: {type: string, maxLength: 200}}
+      responses:
+        '200': {$ref: '#/components/responses/ListResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+    post:
+      tags: [Devices]
+      summary: Register an approved device
+      description: Requires `devices.manage`. The management target must be an IP address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeviceCreate'}
+      responses:
+        '201': {$ref: '#/components/responses/DeviceResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}]
+    get:
+      tags: [Devices]
+      summary: Get an approved device
+      responses:
+        '200': {$ref: '#/components/responses/DeviceResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Devices]
+      summary: Update an approved device
+      description: Requires `devices.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DevicePatch'}
+      responses:
+        '200': {$ref: '#/components/responses/DeviceResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+    delete:
+      tags: [Devices]
+      summary: Delete a device without retained backups
+      description: Requires `devices.manage`.
+      responses:
+        '204': {description: Device deleted}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}/test-connection:
+    post:
+      tags: [Devices]
+      summary: Test the registered connector
+      description: Requires `devices.manage`. No user-supplied command is accepted.
+      parameters: [{$ref: '#/components/parameters/DeviceID'}]
+      responses:
+        '200': {$ref: '#/components/responses/DataResponse'}
+        '502': {$ref: '#/components/responses/DeviceFailure'}
+        '504': {$ref: '#/components/responses/Timeout'}
+  /api/v1/devices/{deviceID}/config/running:
+    get:
+      tags: [Configuration]
+      summary: Read the running configuration
+      description: Requires `configs.read`. `refresh=true` additionally requires `devices.manage`.
+      parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/Refresh'}]
+      responses:
+        '200': {$ref: '#/components/responses/ConfigResponse'}
+        '502': {$ref: '#/components/responses/DeviceFailure'}
+        '504': {$ref: '#/components/responses/Timeout'}
+  /api/v1/devices/{deviceID}/config/startup:
+    get:
+      tags: [Configuration]
+      summary: Read the startup configuration
+      parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/Refresh'}]
+      responses:
+        '200': {$ref: '#/components/responses/ConfigResponse'}
+        '502': {$ref: '#/components/responses/DeviceFailure'}
+  /api/v1/devices/{deviceID}/config/running/download:
+    get:
+      tags: [Configuration]
+      summary: Download the running configuration
+      parameters: [{$ref: '#/components/parameters/DeviceID'}]
+      responses:
+        '200':
+          description: Configuration text
+          content: {text/plain: {schema: {type: string}}}
+  /api/v1/devices/{deviceID}/config/startup/download:
+    get:
+      tags: [Configuration]
+      summary: Download the startup configuration
+      parameters: [{$ref: '#/components/parameters/DeviceID'}]
+      responses:
+        '200':
+          description: Configuration text
+          content: {text/plain: {schema: {type: string}}}
+  /api/v1/devices/{deviceID}/facts:
+    get:
+      tags: [Configuration]
+      summary: Read device facts
+      parameters: [{$ref: '#/components/parameters/DeviceID'}]
+      responses:
+        '200': {$ref: '#/components/responses/DataResponse'}
+  /api/v1/devices/{deviceID}/interfaces:
+    get:
+      tags: [Configuration]
+      summary: Read interface status
+      parameters: [{$ref: '#/components/parameters/DeviceID'}]
+      responses:
+        '200': {$ref: '#/components/responses/DataResponse'}
+  /api/v1/devices/{deviceID}/backups:
+    get:
+      tags: [Backups]
+      summary: List configuration backups
+      description: Requires `backups.read`.
+      parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/Limit'}, {$ref: '#/components/parameters/Offset'}]
+      responses:
+        '200': {$ref: '#/components/responses/ListResponse'}
+    post:
+      tags: [Backups]
+      summary: Create a manual configuration backup
+      description: Requires `backups.create`. Identical content is deduplicated.
+      parameters: [{$ref: '#/components/parameters/DeviceID'}]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config_type: {type: string, enum: [running, startup], default: running}
+      responses:
+        '201': {$ref: '#/components/responses/DataResponse'}
+        '200': {description: Existing identical backup, content: {application/json: {schema: {$ref: '#/components/schemas/DataEnvelope'}}}}
+  /api/v1/devices/{deviceID}/backups/{backupID}:
+    get:
+      tags: [Backups]
+      summary: Get backup metadata and content
+      parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/BackupID'}]
+      responses:
+        '200': {$ref: '#/components/responses/DataResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/devices/{deviceID}/backups/{backupID}/download:
+    get:
+      tags: [Backups]
+      summary: Download a retained backup
+      parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/BackupID'}]
+      responses:
+        '200': {description: Configuration text, content: {text/plain: {schema: {type: string}}}}
+  /api/v1/devices/{deviceID}/backups/{leftID}/diff/{rightID}:
+    get:
+      tags: [Backups]
+      summary: Compare two backups
+      parameters:
+        - {$ref: '#/components/parameters/DeviceID'}
+        - {name: leftID, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: rightID, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {$ref: '#/components/responses/DataResponse'}
+  /api/v1/audit-logs:
+    get:
+      tags: [Audit]
+      summary: List audit records
+      description: Requires `audit.read`. Audit records never contain credentials or configuration content.
+      parameters: [{$ref: '#/components/parameters/Limit'}, {$ref: '#/components/parameters/Offset'}]
+      responses:
+        '200': {$ref: '#/components/responses/ListResponse'}
+  /api/v1/audit-logs/{auditID}:
+    get:
+      tags: [Audit]
+      summary: Get an audit record
+      parameters:
+        - {name: auditID, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {$ref: '#/components/responses/DataResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    DeviceID: {name: deviceID, in: path, required: true, schema: {type: string, format: uuid}}
+    CredentialID: {name: credentialID, in: path, required: true, schema: {type: string, format: uuid}}
+    BackupID: {name: backupID, in: path, required: true, schema: {type: string, format: uuid}}
+    Limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+    Offset: {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+    Refresh: {name: refresh, in: query, schema: {type: boolean, default: false}}
+  schemas:
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties: {username: {type: string}, password: {type: string, format: password}}
+    TokenSet:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in]
+      properties:
+        access_token: {type: string}
+        refresh_token: {type: string}
+        token_type: {type: string, const: Bearer}
+        expires_in: {type: integer}
+    CredentialCreate:
+      type: object
+      additionalProperties: false
+      required: [name, auth_type, username]
+      properties:
+        name: {type: string}
+        auth_type: {type: string, enum: [password, private_key]}
+        username: {type: string}
+        password: {type: string, format: password}
+        private_key: {type: string, writeOnly: true}
+        enable_secret: {type: string, format: password, writeOnly: true}
+    DeviceWrite:
+      type: object
+      additionalProperties: false
+      properties:
+        display_name: {type: string, maxLength: 200}
+        hostname: {type: string, maxLength: 253}
+        management_ip: {type: string, format: ip}
+        management_port: {type: integer, minimum: 1, maximum: 65535, default: 22}
+        vendor: {type: string, enum: [cisco]}
+        platform: {type: string, enum: [ios, ios-xe]}
+        protocol: {type: string, enum: [ssh]}
+        credential_id: {type: string, format: uuid}
+        device_group: {type: string}
+        description: {type: string}
+        enabled: {type: boolean}
+    DeviceCreate:
+      allOf:
+        - {$ref: '#/components/schemas/DeviceWrite'}
+        - type: object
+          required: [display_name, management_ip, vendor, platform, protocol, credential_id]
+    DevicePatch:
+      allOf:
+        - {$ref: '#/components/schemas/DeviceWrite'}
+        - type: object
+          minProperties: 1
+    Device:
+      allOf:
+        - {$ref: '#/components/schemas/DeviceWrite'}
+        - type: object
+          required: [id, display_name, management_ip, management_port, vendor, platform, protocol, enabled, created_at, updated_at]
+          properties:
+            id: {type: string, format: uuid}
+            created_at: {type: string, format: date-time}
+            updated_at: {type: string, format: date-time}
+            last_success_at: {type: string, format: date-time}
+            last_failure_at: {type: string, format: date-time}
+            last_error_code: {type: string}
+    ConfigResult:
+      type: object
+      required: [device_id, vendor, platform, protocol, configuration_type, retrieved_at, from_cache, content_hash, config]
+      properties:
+        device_id: {type: string, format: uuid}
+        hostname: {type: string}
+        vendor: {type: string}
+        platform: {type: string}
+        protocol: {type: string}
+        configuration_type: {type: string, enum: [running, startup]}
+        retrieved_at: {type: string, format: date-time}
+        from_cache: {type: boolean}
+        content_hash: {type: string, pattern: '^[a-f0-9]{64}$'}
+        config: {type: string}
+    DataEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta: {$ref: '#/components/schemas/Meta'}
+    Meta:
+      type: object
+      required: [request_id]
+      properties:
+        request_id: {type: string, format: uuid}
+        pagination:
+          type: object
+          properties: {limit: {type: integer}, offset: {type: integer}, total: {type: integer}}
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: {type: string, example: DEVICE_CONNECTION_FAILED}
+            message: {type: string}
+            request_id: {type: string, format: uuid}
+  responses:
+    DataResponse: {description: Successful response, content: {application/json: {schema: {$ref: '#/components/schemas/DataEnvelope'}}}}
+    ListResponse: {description: Paginated response, content: {application/json: {schema: {$ref: '#/components/schemas/DataEnvelope'}}}}
+    DeviceResponse: {description: Device, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Device'}}}]}}}}
+    ConfigResponse: {description: Configuration, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ConfigResult'}}}]}}}}
+    AuthResponse: {description: Tokens issued, content: {application/json: {schema: {$ref: '#/components/schemas/DataEnvelope'}}}}
+    Unauthorized: {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+    Forbidden: {description: Permission denied, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+    NotFound: {description: Resource not found, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+    Conflict: {description: Conflicting state, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+    ValidationFailed: {description: Invalid request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+    DeviceFailure: {description: Safe connector failure, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+    Timeout: {description: Device operation timed out, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}

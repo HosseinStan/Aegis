@@ -1,0 +1,38 @@
+.env
+*.db
+*.db-shm
+*.db-wal
+**/data/*
+!**/data/.gitkeep
+**/backups/*
+!**/backups/.gitkeep
+*.log
+*.pid
+known_hosts
+coverage.out
+bin/
+dist/
+.idea/
+.vscode/
+# Environment variants
+.env.*
+!.env.example
+
+# Private keys / certificates
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Other local databases
+*.sqlite
+*.sqlite3
+
+# SSH private keys
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Secrets folders
+secrets/

@@ -1,0 +1,7 @@
+version 17.9
+hostname OFFICE-SW1
+interface GigabitEthernet1/0/1
+ description Office access point
+ switchport access vlan 20
+end
+
