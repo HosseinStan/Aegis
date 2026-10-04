@@ -109,21 +109,38 @@ const (
 	PolicyStatusNotEvaluated       = "not_evaluated"
 	PolicyStatusPass               = "pass"
 	PolicyStatusViolation          = "violation"
+	ChangeOperationAdd             = "add"
+	ChangeOperationRemove          = "remove"
+	ChangeAnalysisVersion          = 1
 )
 
 type ChangeEvent struct {
-	ID                  string    `json:"id"`
-	DeviceID            string    `json:"device_id"`
-	ConfigType          string    `json:"config_type"`
-	FromBackupID        string    `json:"from_backup_id"`
-	ToBackupID          string    `json:"to_backup_id"`
-	DetectedAt          time.Time `json:"detected_at"`
-	AddedLines          int       `json:"added_lines"`
-	RemovedLines        int       `json:"removed_lines"`
-	AuthorizationStatus string    `json:"authorization_status"`
-	PolicyStatus        string    `json:"policy_status"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ID                  string     `json:"id"`
+	DeviceID            string     `json:"device_id"`
+	ConfigType          string     `json:"config_type"`
+	FromBackupID        string     `json:"from_backup_id"`
+	ToBackupID          string     `json:"to_backup_id"`
+	DetectedAt          time.Time  `json:"detected_at"`
+	AddedLines          int        `json:"added_lines"`
+	RemovedLines        int        `json:"removed_lines"`
+	AuthorizationStatus string     `json:"authorization_status"`
+	PolicyStatus        string     `json:"policy_status"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+	AnalysisVersion     int        `json:"analysis_version"`
+	AnalyzedAt          *time.Time `json:"analyzed_at,omitempty"`
+	ItemCount           int        `json:"item_count"`
+}
+
+type ChangeEventItem struct {
+	ID            string    `json:"id"`
+	ChangeEventID string    `json:"change_event_id"`
+	Ordinal       int       `json:"ordinal"`
+	Operation     string    `json:"operation"`
+	ContextPath   []string  `json:"context_path"`
+	Command       string    `json:"command"`
+	Sensitive     bool      `json:"sensitive"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type ConfigResult struct {

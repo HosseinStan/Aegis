@@ -13,17 +13,23 @@ var _ repositories.ChangeEventRepository = (*Store)(nil)
 
 const changeEventColumns = `id, device_id, config_type, from_backup_id,
     to_backup_id, detected_at, added_lines, removed_lines,
-    authorization_status, policy_status, created_at, updated_at`
+    authorization_status, policy_status, created_at, updated_at,
+    analysis_version, analyzed_at, item_count`
 
 func insertChangeEvent(ctx context.Context, tx *sql.Tx, e domain.ChangeEvent) error {
 	// Fixed fractional precision keeps TEXT ordering chronological even when
 	// a detection lands on an exact second. parseTime accepts this RFC3339 form.
 	detectedAt := e.DetectedAt.UTC().Format("2006-01-02T15:04:05.000000000Z")
+	var analyzedAt any
+	if e.AnalyzedAt != nil {
+		analyzedAt = timestamp(*e.AnalyzedAt)
+	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO change_events (`+changeEventColumns+`)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.ID, e.DeviceID, e.ConfigType, e.FromBackupID, e.ToBackupID,
 		detectedAt, e.AddedLines, e.RemovedLines,
-		e.AuthorizationStatus, e.PolicyStatus, timestamp(e.CreatedAt), timestamp(e.UpdatedAt))
+		e.AuthorizationStatus, e.PolicyStatus, timestamp(e.CreatedAt), timestamp(e.UpdatedAt),
+		e.AnalysisVersion, analyzedAt, e.ItemCount)
 	return repositoryError(mapWriteError(err))
 }
 
@@ -70,9 +76,10 @@ func (s *Store) ListChangeEvents(ctx context.Context, filter repositories.Change
 func scanChangeEvent(scan scanFunc) (domain.ChangeEvent, error) {
 	var e domain.ChangeEvent
 	var detectedAt, createdAt, updatedAt string
+	var analyzedAt sql.NullString
 	err := scan(&e.ID, &e.DeviceID, &e.ConfigType, &e.FromBackupID, &e.ToBackupID,
 		&detectedAt, &e.AddedLines, &e.RemovedLines, &e.AuthorizationStatus,
-		&e.PolicyStatus, &createdAt, &updatedAt)
+		&e.PolicyStatus, &createdAt, &updatedAt, &e.AnalysisVersion, &analyzedAt, &e.ItemCount)
 	if err != nil {
 		return e, repositoryError(err)
 	}
@@ -82,6 +89,9 @@ func scanChangeEvent(scan scanFunc) (domain.ChangeEvent, error) {
 	if e.CreatedAt, err = parseTime(createdAt); err != nil {
 		return e, err
 	}
-	e.UpdatedAt, err = parseTime(updatedAt)
+	if e.UpdatedAt, err = parseTime(updatedAt); err != nil {
+		return e, err
+	}
+	e.AnalyzedAt, err = parseNullableTime(analyzedAt)
 	return e, err
 }

@@ -2,16 +2,28 @@ package sqlite
 
 import (
 	"context"
+	"slices"
+	"strings"
 
+	"company.local/aegis/apps/aegis-api/internal/changes"
 	"company.local/aegis/apps/aegis-api/internal/domain"
 	"company.local/aegis/apps/aegis-api/internal/repositories"
 )
 
 func (s *Store) CreateBackup(ctx context.Context, b domain.ConfigBackup) error {
-	return s.CreateBackupWithChangeEvent(ctx, b, nil)
+	return s.CreateBackupWithChangeAnalysis(ctx, b, nil, nil)
 }
 
 func (s *Store) CreateBackupWithChangeEvent(ctx context.Context, b domain.ConfigBackup, event *domain.ChangeEvent) error {
+	return s.CreateBackupWithChangeAnalysis(ctx, b, event, nil)
+}
+
+// CreateBackupWithChangeAnalysis commits the snapshot, event, and all items as
+// one unit. Legacy callers may still persist an unanalyzed, version-zero event.
+func (s *Store) CreateBackupWithChangeAnalysis(ctx context.Context, b domain.ConfigBackup, event *domain.ChangeEvent, items []domain.ChangeEventItem) error {
+	if err := validateChangeAnalysis(b, event, items); err != nil {
+		return err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return repositoryError(err)
@@ -27,14 +39,54 @@ func (s *Store) CreateBackupWithChangeEvent(ctx context.Context, b domain.Config
 		return repositoryError(mapWriteError(err))
 	}
 	if event != nil {
-		if event.ToBackupID != b.ID {
-			return domain.ErrValidation
-		}
 		if err := insertChangeEvent(ctx, tx, *event); err != nil {
 			return err
 		}
 	}
+	for _, item := range items {
+		if err := insertChangeEventItem(ctx, tx, item); err != nil {
+			return err
+		}
+	}
 	return repositoryError(mapWriteError(tx.Commit()))
+}
+
+func validateChangeAnalysis(b domain.ConfigBackup, event *domain.ChangeEvent, items []domain.ChangeEventItem) error {
+	if event == nil {
+		if len(items) != 0 {
+			return domain.ErrValidation
+		}
+		return nil
+	}
+	if event.ToBackupID != b.ID || event.ItemCount != len(items) {
+		return domain.ErrValidation
+	}
+	switch event.AnalysisVersion {
+	case 0:
+		if event.AnalyzedAt != nil || len(items) != 0 {
+			return domain.ErrValidation
+		}
+	case domain.ChangeAnalysisVersion:
+		if event.AnalyzedAt == nil {
+			return domain.ErrValidation
+		}
+	default:
+		return domain.ErrValidation
+	}
+	for ordinal, item := range items {
+		if item.ChangeEventID != event.ID || item.Ordinal != ordinal ||
+			(item.Operation != domain.ChangeOperationAdd && item.Operation != domain.ChangeOperationRemove) ||
+			strings.TrimSpace(item.Command) == "" {
+			return domain.ErrValidation
+		}
+		// Reject unsafe input rather than silently repairing it. This also guards
+		// future callers that bypass the service's sanitizer.
+		command, path, sensitive := changes.Sanitize(item.Command, item.ContextPath)
+		if command != item.Command || !slices.Equal(path, item.ContextPath) || (sensitive && !item.Sensitive) {
+			return domain.ErrValidation
+		}
+	}
+	return nil
 }
 
 func (s *Store) GetBackup(ctx context.Context, deviceID, id string) (domain.ConfigBackup, error) {

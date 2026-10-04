@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"company.local/aegis/apps/aegis-api/internal/changes"
 	"company.local/aegis/apps/aegis-api/internal/domain"
 	"company.local/aegis/apps/aegis-api/internal/observability"
 	"company.local/aegis/apps/aegis-api/internal/repositories"
@@ -82,6 +83,7 @@ func (s *BackupService) Create(ctx context.Context, principal domain.Principal, 
 	now := time.Now().UTC()
 	id := uuid.NewString()
 	var event *domain.ChangeEvent
+	var items []domain.ChangeEventItem
 	if hasPrevious {
 		_, previous, err := s.Content(ctx, deviceID, latest.ID)
 		if err != nil {
@@ -97,6 +99,17 @@ func (s *BackupService) Create(ctx context.Context, principal domain.Principal, 
 			AddedLines: diff.AddedLines, RemovedLines: diff.RemovedLines,
 			AuthorizationStatus: domain.AuthorizationStatusUnaccounted,
 			PolicyStatus:        domain.PolicyStatusNotEvaluated, CreatedAt: now, UpdatedAt: now,
+			AnalysisVersion: domain.ChangeAnalysisVersion, AnalyzedAt: &now,
+		}
+		analysis := changes.Analyze(previous, result.Config)
+		event.ItemCount = len(analysis)
+		items = make([]domain.ChangeEventItem, len(analysis))
+		for ordinal, item := range analysis {
+			items[ordinal] = domain.ChangeEventItem{
+				ID: uuid.NewString(), ChangeEventID: event.ID, Ordinal: ordinal,
+				Operation: item.Operation, ContextPath: item.ContextPath,
+				Command: item.Command, Sensitive: item.Sensitive, CreatedAt: now,
+			}
 		}
 	}
 	relative := filepath.Join(deviceID, now.Format("2006"), now.Format("01"), now.Format("20060102T150405.000000000Z")+"_"+configType+"_"+id+".txt")
@@ -121,7 +134,7 @@ func (s *BackupService) Create(ctx context.Context, principal domain.Principal, 
 		return BackupResult{}, closeErr
 	}
 	backup := domain.ConfigBackup{ID: id, DeviceID: deviceID, ConfigType: configType, StoragePath: relative, ContentHash: result.ContentHash, SizeBytes: int64(len(result.Config)), TriggerType: "manual", TriggeredBy: principal.UserID, RetrievedAt: result.RetrievedAt, CreatedAt: now}
-	if err := s.repository.CreateBackupWithChangeEvent(ctx, backup, event); err != nil {
+	if err := s.repository.CreateBackupWithChangeAnalysis(ctx, backup, event, items); err != nil {
 		_ = os.Remove(path)
 		return BackupResult{}, err
 	}
