@@ -72,6 +72,7 @@ func (s *BackupService) Create(ctx context.Context, principal domain.Principal, 
 		return BackupResult{}, err
 	}
 	latest, err := s.repository.LatestBackup(ctx, deviceID, configType)
+	hasPrevious := err == nil
 	if err == nil && latest.ContentHash == result.ContentHash {
 		return BackupResult{Backup: latest, Created: false}, nil
 	}
@@ -80,6 +81,24 @@ func (s *BackupService) Create(ctx context.Context, principal domain.Principal, 
 	}
 	now := time.Now().UTC()
 	id := uuid.NewString()
+	var event *domain.ChangeEvent
+	if hasPrevious {
+		_, previous, err := s.Content(ctx, deviceID, latest.ID)
+		if err != nil {
+			return BackupResult{}, err
+		}
+		diff, err := configDiff(previous, result.Config, latest.ID, id)
+		if err != nil {
+			return BackupResult{}, err
+		}
+		event = &domain.ChangeEvent{
+			ID: uuid.NewString(), DeviceID: deviceID, ConfigType: configType,
+			FromBackupID: latest.ID, ToBackupID: id, DetectedAt: now,
+			AddedLines: diff.AddedLines, RemovedLines: diff.RemovedLines,
+			AuthorizationStatus: domain.AuthorizationStatusUnaccounted,
+			PolicyStatus:        domain.PolicyStatusNotEvaluated, CreatedAt: now, UpdatedAt: now,
+		}
+	}
 	relative := filepath.Join(deviceID, now.Format("2006"), now.Format("01"), now.Format("20060102T150405.000000000Z")+"_"+configType+"_"+id+".txt")
 	path, err := s.safePath(relative)
 	if err != nil {
@@ -102,7 +121,7 @@ func (s *BackupService) Create(ctx context.Context, principal domain.Principal, 
 		return BackupResult{}, closeErr
 	}
 	backup := domain.ConfigBackup{ID: id, DeviceID: deviceID, ConfigType: configType, StoragePath: relative, ContentHash: result.ContentHash, SizeBytes: int64(len(result.Config)), TriggerType: "manual", TriggeredBy: principal.UserID, RetrievedAt: result.RetrievedAt, CreatedAt: now}
-	if err := s.repository.CreateBackup(ctx, backup); err != nil {
+	if err := s.repository.CreateBackupWithChangeEvent(ctx, backup, event); err != nil {
 		_ = os.Remove(path)
 		return BackupResult{}, err
 	}
@@ -171,6 +190,10 @@ func (s *BackupService) Diff(ctx context.Context, deviceID, leftID, rightID stri
 	if err != nil {
 		return DiffResult{}, err
 	}
+	return configDiff(left, right, leftID, rightID)
+}
+
+func configDiff(left, right, leftID, rightID string) (DiffResult, error) {
 	text, err := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{A: difflib.SplitLines(left), B: difflib.SplitLines(right), FromFile: leftID, ToFile: rightID, Context: 3})
 	if err != nil {
 		return DiffResult{}, err

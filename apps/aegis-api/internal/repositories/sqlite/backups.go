@@ -8,13 +8,33 @@ import (
 )
 
 func (s *Store) CreateBackup(ctx context.Context, b domain.ConfigBackup) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO config_backups
+	return s.CreateBackupWithChangeEvent(ctx, b, nil)
+}
+
+func (s *Store) CreateBackupWithChangeEvent(ctx context.Context, b domain.ConfigBackup, event *domain.ChangeEvent) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return repositoryError(err)
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `INSERT INTO config_backups
         (id, device_id, config_type, storage_path, content_hash, size_bytes,
          trigger_type, triggered_by, retrieved_at, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, b.ID, b.DeviceID, b.ConfigType,
 		b.StoragePath, b.ContentHash, b.SizeBytes, b.TriggerType, nullable(b.TriggeredBy),
 		timestamp(b.RetrievedAt), timestamp(b.CreatedAt))
-	return repositoryError(mapWriteError(err))
+	if err != nil {
+		return repositoryError(mapWriteError(err))
+	}
+	if event != nil {
+		if event.ToBackupID != b.ID {
+			return domain.ErrValidation
+		}
+		if err := insertChangeEvent(ctx, tx, *event); err != nil {
+			return err
+		}
+	}
+	return repositoryError(mapWriteError(tx.Commit()))
 }
 
 func (s *Store) GetBackup(ctx context.Context, deviceID, id string) (domain.ConfigBackup, error) {
