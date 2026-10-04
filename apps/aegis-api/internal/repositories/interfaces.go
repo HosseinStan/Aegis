@@ -62,6 +62,7 @@ type AuditRepository interface {
 type BackupRepository interface {
 	CreateBackup(context.Context, domain.ConfigBackup) error
 	CreateBackupWithChangeEvent(context.Context, domain.ConfigBackup, *domain.ChangeEvent) error
+	CreateBackupWithChangeAnalysis(context.Context, domain.ConfigBackup, *domain.ChangeEvent, []domain.ChangeEventItem) error
 	GetBackup(context.Context, string, string) (domain.ConfigBackup, error)
 	LatestBackup(context.Context, string, string) (domain.ConfigBackup, error)
 	ListBackups(context.Context, string, Page) ([]domain.ConfigBackup, int, error)
@@ -77,4 +78,8 @@ type ChangeEventFilter struct {
 type ChangeEventRepository interface {
 	GetChangeEvent(context.Context, string) (domain.ChangeEvent, error)
 	ListChangeEvents(context.Context, ChangeEventFilter, Page) ([]domain.ChangeEvent, int, error)
+}
+
+type ChangeEventItemRepository interface {
+	ListChangeEventItems(context.Context, string, Page) ([]domain.ChangeEventItem, int, error)
 }

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -104,6 +105,25 @@ func TestBackupChangeDetectionAndAdjacentChain(t *testing.T) {
 	require.Equal(t, event.DetectedAt, event.CreatedAt)
 	require.Equal(t, event.CreatedAt, event.UpdatedAt)
 	require.Equal(t, time.UTC, event.DetectedAt.Location())
+	require.Equal(t, domain.ChangeAnalysisVersion, event.AnalysisVersion)
+	require.NotNil(t, event.AnalyzedAt)
+	require.Equal(t, event.DetectedAt, *event.AnalyzedAt)
+	items, itemTotal, err := store.ListChangeEventItems(ctx, event.ID, page)
+	require.NoError(t, err)
+	require.Equal(t, 3, itemTotal)
+	require.Equal(t, itemTotal, event.ItemCount)
+	for ordinal, item := range items {
+		require.Equal(t, event.ID, item.ChangeEventID)
+		require.Equal(t, ordinal, item.Ordinal)
+		require.Equal(t, []string{"interface Gi1/0/1"}, item.ContextPath)
+		require.Equal(t, []string{"remove", "add", "add"}[ordinal], item.Operation)
+		require.Equal(t, []string{"description old", "description new", "shutdown"}[ordinal], item.Command)
+		require.Equal(t, event.DetectedAt, item.CreatedAt)
+		require.Equal(t, time.UTC, item.CreatedAt.Location())
+		require.False(t, item.Sensitive)
+		_, err := uuid.Parse(item.ID)
+		require.NoError(t, err)
+	}
 	_, err = uuid.Parse(event.ID)
 	require.NoError(t, err)
 	diff, err := s.Diff(ctx, deviceID, first.Backup.ID, second.Backup.ID)
@@ -190,10 +210,10 @@ func TestBackupChangeDetectionRejectsUnreadablePreviousContent(t *testing.T) {
 
 type invalidEventRepository struct{ repositories.BackupRepository }
 
-func (r invalidEventRepository) CreateBackupWithChangeEvent(ctx context.Context, b domain.ConfigBackup, event *domain.ChangeEvent) error {
+func (r invalidEventRepository) CreateBackupWithChangeAnalysis(ctx context.Context, b domain.ConfigBackup, event *domain.ChangeEvent, items []domain.ChangeEventItem) error {
 	invalid := *event
 	invalid.PolicyStatus = "invalid"
-	return r.BackupRepository.CreateBackupWithChangeEvent(ctx, b, &invalid)
+	return r.BackupRepository.CreateBackupWithChangeAnalysis(ctx, b, &invalid, items)
 }
 
 func TestBackupChangeEventDatabaseFailureRemovesNewFile(t *testing.T) {
@@ -243,5 +263,149 @@ func TestConcurrentBackupsCreateOneEvent(t *testing.T) {
 	_, total, err := store.ListChangeEvents(ctx, repositories.ChangeEventFilter{}, repositories.Page{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, 1, total)
+	require.Len(t, backupFiles(t, s.root), 2)
+}
+
+func TestBackupCommentOnlyChangeHasAnalyzedEventWithoutItems(t *testing.T) {
+	s, store, connector, principal, deviceID := backupFixture(t)
+	ctx := context.Background()
+	connector.SetRunning("hostname LAB\n! old comment\n")
+	first, err := s.Create(ctx, principal, deviceID, "running")
+	require.NoError(t, err)
+	connector.SetRunning("hostname LAB\n! new comment\n\n")
+	second, err := s.Create(ctx, principal, deviceID, "running")
+	require.NoError(t, err)
+	require.True(t, second.Created)
+	events, total, err := store.ListChangeEvents(ctx, repositories.ChangeEventFilter{DeviceID: deviceID}, repositories.Page{Limit: 10})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	event := events[0]
+	require.Equal(t, domain.ChangeAnalysisVersion, event.AnalysisVersion)
+	require.NotNil(t, event.AnalyzedAt)
+	require.Equal(t, time.UTC, event.AnalyzedAt.Location())
+	require.Zero(t, event.ItemCount)
+	items, itemTotal, err := store.ListChangeEventItems(ctx, event.ID, repositories.Page{Limit: 10})
+	require.NoError(t, err)
+	require.Empty(t, items)
+	require.Zero(t, itemTotal)
+	diff, err := s.Diff(ctx, deviceID, first.Backup.ID, second.Backup.ID)
+	require.NoError(t, err)
+	require.True(t, diff.Changed)
+	require.Positive(t, diff.AddedLines)
+	require.Positive(t, diff.RemovedLines)
+	require.Equal(t, diff.AddedLines, event.AddedLines)
+	require.Equal(t, diff.RemovedLines, event.RemovedLines)
+}
+
+func TestBackupChangeItemsNeverPersistCommandOrContextSecrets(t *testing.T) {
+	s, store, connector, principal, deviceID := backupFixture(t)
+	ctx := context.Background()
+	const oldSecret = "SENTINEL_SERVICE_OLD_PRIVATE_VALUE"
+	const newSecret = "SENTINEL_SERVICE_NEW_PRIVATE_VALUE"
+	connector.SetRunning("enable secret 9 " + oldSecret + "\nunknown password " + oldSecret + "\n child old\nradius server LAB\n key " + oldSecret + "\n")
+	_, err := s.Create(ctx, principal, deviceID, "running")
+	require.NoError(t, err)
+	connector.SetRunning("enable secret 9 " + newSecret + "\nunknown password " + newSecret + "\n child new\nradius server LAB\n key " + newSecret + "\ncrypto key generate rsa modulus 2048\n")
+	second, err := s.Create(ctx, principal, deviceID, "running")
+	require.NoError(t, err)
+	events, total, err := store.ListChangeEvents(ctx, repositories.ChangeEventFilter{}, repositories.Page{Limit: 10})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	event := events[0]
+	items, itemTotal, err := store.ListChangeEventItems(ctx, event.ID, repositories.Page{Limit: 100})
+	require.NoError(t, err)
+	require.Equal(t, 9, itemTotal)
+	require.Equal(t, event.ItemCount, itemTotal)
+	sensitive, sensitiveContext, ordinaryKey := 0, false, false
+	for ordinal, item := range items {
+		require.Equal(t, ordinal, item.Ordinal)
+		require.Equal(t, event.ID, item.ChangeEventID)
+		require.False(t, strings.Contains(item.Command, oldSecret) || strings.Contains(item.Command, newSecret))
+		for _, parent := range item.ContextPath {
+			require.False(t, strings.Contains(parent, oldSecret) || strings.Contains(parent, newSecret))
+			if strings.Contains(parent, "<redacted>") {
+				sensitiveContext = true
+				require.True(t, item.Sensitive)
+			}
+		}
+		if item.Sensitive {
+			sensitive++
+		}
+		if item.Command == "crypto key generate rsa modulus 2048" {
+			ordinaryKey = true
+			require.False(t, item.Sensitive)
+		}
+	}
+	require.Equal(t, 8, sensitive)
+	require.True(t, sensitiveContext)
+	require.True(t, ordinaryKey)
+	// Raw secrets remain only in the existing protected snapshot, not items.
+	_, content, err := s.Content(ctx, deviceID, second.Backup.ID)
+	require.NoError(t, err)
+	require.True(t, strings.Contains(content, newSecret))
+	files := backupFiles(t, s.root)
+	duplicate, err := s.Create(ctx, principal, deviceID, "running")
+	require.NoError(t, err)
+	require.False(t, duplicate.Created)
+	require.Equal(t, files, backupFiles(t, s.root))
+	_, total, err = store.ListChangeEvents(ctx, repositories.ChangeEventFilter{}, repositories.Page{Limit: 10})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	_, total, err = store.ListChangeEventItems(ctx, event.ID, repositories.Page{Limit: 100})
+	require.NoError(t, err)
+	require.Equal(t, itemTotal, total)
+}
+
+type invalidItemRepository struct {
+	repositories.BackupRepository
+	backup  domain.ConfigBackup
+	eventID string
+}
+
+func (r *invalidItemRepository) CreateBackupWithChangeAnalysis(ctx context.Context, b domain.ConfigBackup, event *domain.ChangeEvent, items []domain.ChangeEventItem) error {
+	r.backup, r.eventID = b, event.ID
+	invalid := append([]domain.ChangeEventItem{}, items...)
+	invalid[1].ID = invalid[0].ID // Fail SQL after the first valid item is inserted.
+	return r.BackupRepository.CreateBackupWithChangeAnalysis(ctx, b, event, invalid)
+}
+
+func TestBackupItemInsertionFailureRollsBackAndRemovesNewFile(t *testing.T) {
+	s, store, connector, principal, deviceID := backupFixture(t)
+	ctx := context.Background()
+	first, err := s.Create(ctx, principal, deviceID, "running")
+	require.NoError(t, err)
+	files := backupFiles(t, s.root)
+	failing := &invalidItemRepository{BackupRepository: store}
+	s.repository = failing
+	connector.SetRunning("hostname CHANGED\n")
+	_, err = s.Create(ctx, principal, deviceID, "running")
+	require.ErrorIs(t, err, domain.ErrConflict)
+	require.Equal(t, files, backupFiles(t, s.root))
+	_, err = os.Stat(filepath.Join(s.root, first.Backup.StoragePath))
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(s.root, failing.backup.StoragePath))
+	require.ErrorIs(t, err, os.ErrNotExist)
+	_, err = store.GetBackup(ctx, deviceID, first.Backup.ID)
+	require.NoError(t, err)
+	_, err = store.GetBackup(ctx, deviceID, failing.backup.ID)
+	require.ErrorIs(t, err, domain.ErrNotFound)
+	_, err = store.GetChangeEvent(ctx, failing.eventID)
+	require.ErrorIs(t, err, domain.ErrNotFound)
+	_, total, err := store.ListChangeEventItems(ctx, failing.eventID, repositories.Page{Limit: 10})
+	require.NoError(t, err)
+	require.Zero(t, total)
+	_, total, err = store.ListBackups(ctx, deviceID, repositories.Page{Limit: 10})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	_, total, err = store.ListChangeEvents(ctx, repositories.ChangeEventFilter{}, repositories.Page{Limit: 10})
+	require.NoError(t, err)
+	require.Zero(t, total)
+	// The previous snapshot still reads correctly, and a subsequent retry works.
+	_, _, err = s.Content(ctx, deviceID, first.Backup.ID)
+	require.NoError(t, err)
+	s.repository = store
+	result, err := s.Create(ctx, principal, deviceID, "running")
+	require.NoError(t, err)
+	require.True(t, result.Created)
 	require.Len(t, backupFiles(t, s.root), 2)
 }
