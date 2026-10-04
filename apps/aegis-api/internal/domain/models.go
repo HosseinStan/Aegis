@@ -103,6 +103,29 @@ type ConfigBackup struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+const (
+	AuthorizationStatusUnaccounted = "unaccounted"
+	AuthorizationStatusAuthorized  = "authorized"
+	PolicyStatusNotEvaluated       = "not_evaluated"
+	PolicyStatusPass               = "pass"
+	PolicyStatusViolation          = "violation"
+)
+
+type ChangeEvent struct {
+	ID                  string    `json:"id"`
+	DeviceID            string    `json:"device_id"`
+	ConfigType          string    `json:"config_type"`
+	FromBackupID        string    `json:"from_backup_id"`
+	ToBackupID          string    `json:"to_backup_id"`
+	DetectedAt          time.Time `json:"detected_at"`
+	AddedLines          int       `json:"added_lines"`
+	RemovedLines        int       `json:"removed_lines"`
+	AuthorizationStatus string    `json:"authorization_status"`
+	PolicyStatus        string    `json:"policy_status"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
 type ConfigResult struct {
 	DeviceID          string    `json:"device_id"`
 	Hostname          string    `json:"hostname,omitempty"`
