@@ -1,4 +1,4 @@
-FROM golang:1.26.6-alpine3.24 AS build
+FROM golang:1.26.9-alpine3.24 AS build
 WORKDIR /src/apps/aegis-api
 COPY apps/aegis-api/go.mod apps/aegis-api/go.sum ./
 RUN go mod download
