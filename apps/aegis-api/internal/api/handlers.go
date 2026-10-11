@@ -21,16 +21,17 @@ import (
 type HealthStore interface{ Ping(context.Context) error }
 
 type Handler struct {
-	Auth           *auth.Service
-	Credentials    *credentials.Store
-	Devices        *services.DeviceService
-	Configs        *services.ConfigService
-	Backups        *services.BackupService
-	Audits         repositories.AuditRepository
-	Health         HealthStore
-	Logger         *slog.Logger
-	OpenAPIPath    string
-	TrustedProxies []*net.IPNet
+	Auth                 *auth.Service
+	Credentials          *credentials.Store
+	Devices              *services.DeviceService
+	Configs              *services.ConfigService
+	Backups              *services.BackupService
+	ChangeAuthorizations *services.ChangeAuthorizationService
+	Audits               repositories.AuditRepository
+	Health               HealthStore
+	Logger               *slog.Logger
+	OpenAPIPath          string
+	TrustedProxies       []*net.IPNet
 }
 
 func (h *Handler) Healthz(w http.ResponseWriter, r *http.Request) {

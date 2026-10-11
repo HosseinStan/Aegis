@@ -299,6 +299,183 @@ paths:
       responses:
         '200': {$ref: '#/components/responses/DataResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/devices/{deviceID}/change-authorizations:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}]
+    get:
+      summary: List device-scoped authorization requests
+      description: Requires devices.read + changes.authorization.read and device-group access.
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Offset'}
+        - {name: status, in: query, schema: {type: string, enum: [pending, approved, rejected, revoked]}}
+        - {name: config_type, in: query, schema: {type: string, enum: [running, startup]}}
+      responses:
+        '200': {$ref: '#/components/responses/ChangeAuthorizationListResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    post:
+      summary: Register an explicit scoped authorization request
+      description: >-
+        Requires devices.read + changes.authorization.request and device-group access.
+        Device comes only from the route. Actor and lifecycle timestamps come from the server.
+        Reference is trimmed and uppercased and unique case-insensitively.
+        Categories are trimmed/lowercased, distinct, known version-one categories, and stored sorted.
+        No edits are available; changed scope requires a new request.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/ChangeAuthorizationCreate'}}}
+      responses:
+        '201': {$ref: '#/components/responses/ChangeAuthorizationResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}/change-authorizations/{authorizationID}:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/AuthorizationID'}]
+    get:
+      summary: Inspect an authorization request
+      description: Requires devices.read + changes.authorization.read and device-group access. Cross-device IDs return 404.
+      responses:
+        '200': {$ref: '#/components/responses/ChangeAuthorizationResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/devices/{deviceID}/change-authorizations/{authorizationID}/approve:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/AuthorizationID'}]
+    post:
+      summary: Independently approve a pending request
+      description: >-
+        Requires devices.read + changes.authorization.approve and device-group access.
+        Only pending -> approved, before window_end. Active approver must differ from requester,
+        including system administrators. Server UTC time and authenticated actor are recorded.
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/AuthorizationAction'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/ChangeAuthorizationResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}/change-authorizations/{authorizationID}/reject:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/AuthorizationID'}]
+    post:
+      summary: Reject a pending request
+      description: Requires devices.read + changes.authorization.approve and device-group access. Only pending -> rejected; terminal and immutable decision.
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/AuthorizationAction'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/ChangeAuthorizationResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}/change-authorizations/{authorizationID}/revoke:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/AuthorizationID'}]
+    post:
+      summary: Revoke an approved request
+      description: >-
+        Requires devices.read + changes.authorization.approve and device-group access.
+        Only approved -> revoked; terminal. New links are prohibited. Prior valid links and
+        event authorization remain intact as-of the recorded historical decision. Policy is unchanged.
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/AuthorizationAction'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/ChangeAuthorizationResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}/change-authorizations/{authorizationID}/history:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/AuthorizationID'}]
+    get:
+      summary: Read immutable authorization history
+      description: Requires devices.read + changes.authorization.read and device-group access. Append-only; no edit/delete endpoint or raw configuration payload.
+      parameters: [{$ref: '#/components/parameters/Limit'}, {$ref: '#/components/parameters/Offset'}]
+      responses:
+        '200': {$ref: '#/components/responses/ChangeAuthorizationHistoryResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/devices/{deviceID}/change-events:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}]
+    get:
+      summary: Inspect device change events without backup contents
+      description: Requires devices.read + backups.read and device-group access. No automatic authorization or policy evaluation occurs.
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Offset'}
+        - {name: config_type, in: query, schema: {type: string, enum: [running, startup]}}
+        - {name: authorization_status, in: query, schema: {type: string, enum: [unaccounted, authorized]}}
+        - {name: policy_status, in: query, schema: {type: string, enum: [not_evaluated, pass, violation]}}
+      responses:
+        '200': {$ref: '#/components/responses/ChangeEventListResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/EventID'}]
+    get:
+      summary: Inspect a scoped change event
+      description: Requires devices.read + backups.read and device-group access. Cross-device IDs return 404.
+      responses:
+        '200': {$ref: '#/components/responses/ChangeEventResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/items:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/EventID'}]
+    get:
+      summary: Inspect sanitized classified change items
+      description: Requires devices.read + backups.read and device-group access. Ordinal ascending; only sanitized Command/ContextPath, never raw backup or diff.
+      parameters: [{$ref: '#/components/parameters/Limit'}, {$ref: '#/components/parameters/Offset'}]
+      responses:
+        '200': {$ref: '#/components/responses/ChangeEventItemsResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/authorize:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/EventID'}]
+    post:
+      summary: Explicitly attest and reconcile one observed change event
+      description: >-
+        Requires devices.read + backups.read + changes.authorization.reconcile and device-group access.
+        Active reviewer must differ from requester; independent approver may reconcile.
+        Request must currently be approved with independent approval issued at or before DetectedAt.
+        Event must be unaccounted, match device/config type, have a valid snapshot chain,
+        analysis version 1 and nonzero items with matching count. Every item must have valid
+        classification version 1 and an explicitly allowed category. Other is not a wildcard;
+        subcategory unclassified is not a wildcard. Inclusive window_start <= DetectedAt < exclusive window_end.
+        One request links at most one event and one event links at most one request.
+        Duplicate attempts conflict. Link, event status/UpdatedAt and history commit atomically.
+        DetectedAt is Aegis observation time, not exact physical device command execution time.
+        This is a human attestation supported by checks, not cryptographic proof. No partial authorization.
+        Legacy/zero-item events cannot be authorized. PolicyStatus is untouched.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/ChangeEventAuthorize'}}}
+      responses:
+        '200': {$ref: '#/components/responses/ChangeEventAuthorizationResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/authorization:
+    parameters: [{$ref: '#/components/parameters/DeviceID'}, {$ref: '#/components/parameters/EventID'}]
+    get:
+      summary: Inspect recorded event-to-ticket authorization evidence
+      description: Requires devices.read + changes.authorization.read and device-group access. Historical evidence survives later revocation; unlinked events return 404.
+      responses:
+        '200': {$ref: '#/components/responses/ChangeEventAuthorizationResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
@@ -306,10 +483,119 @@ components:
     DeviceID: {name: deviceID, in: path, required: true, schema: {type: string, format: uuid}}
     CredentialID: {name: credentialID, in: path, required: true, schema: {type: string, format: uuid}}
     BackupID: {name: backupID, in: path, required: true, schema: {type: string, format: uuid}}
+    AuthorizationID: {name: authorizationID, in: path, required: true, schema: {type: string, format: uuid}}
+    EventID: {name: eventID, in: path, required: true, schema: {type: string, format: uuid}}
     Limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
     Offset: {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
     Refresh: {name: refresh, in: query, schema: {type: boolean, default: false}}
   schemas:
+    ChangeAuthorizationCreate:
+      type: object
+      additionalProperties: false
+      required: [reference, config_type, allowed_categories, window_start, window_end]
+      properties:
+        reference: {type: string, description: 'Trimmed/uppercase normalized ASCII letters, digits, dots, underscores, colons and hyphens; normalized length 3-64. No secrets or raw configuration.'}
+        config_type: {type: string, enum: [running, startup]}
+        allowed_categories:
+          type: array
+          minItems: 1
+          maxItems: 13
+          uniqueItems: true
+          description: Normalized lowercase/trimmed, no duplicates after normalization. Other must be explicitly included; unclassified is forbidden.
+          items: {$ref: '#/components/schemas/ChangeAuthorizationCategory'}
+        window_start: {type: string, format: date-time, description: 'Explicit RFC3339 timezone required; normalized UTC, inclusive start.'}
+        window_end: {type: string, format: date-time, description: 'Explicit RFC3339 timezone required; normalized UTC, exclusive end. Start < end, maximum duration 24 hours. End must be after server time at creation/approval.'}
+    ChangeAuthorizationCategory:
+      type: string
+      enum: [system, interface, switching, routing, access_control, aaa, management, monitoring, services, crypto_vpn, qos, redundancy, other]
+    AuthorizationAction:
+      type: object
+      additionalProperties: false
+      description: Empty object or no body. Client actor/timestamp fields are rejected.
+    ChangeEventAuthorize:
+      type: object
+      additionalProperties: false
+      required: [authorization_id, attestation]
+      properties:
+        authorization_id: {type: string, format: uuid}
+        attestation: {type: string, enum: [reviewed_change_items_against_ticket]}
+    ChangeAuthorization:
+      type: object
+      required: [id, reference, device_id, config_type, allowed_categories, window_start, window_end, status, requested_by, requested_at, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        reference: {type: string, minLength: 3, maxLength: 64, pattern: '^[A-Z0-9._:-]+$'}
+        device_id: {type: string, format: uuid}
+        config_type: {type: string, enum: [running, startup]}
+        allowed_categories: {type: array, items: {$ref: '#/components/schemas/ChangeAuthorizationCategory'}, minItems: 1, maxItems: 13, uniqueItems: true}
+        window_start: {type: string, format: date-time}
+        window_end: {type: string, format: date-time}
+        status: {type: string, enum: [pending, approved, rejected, revoked]}
+        requested_by: {type: string, format: uuid}
+        requested_at: {type: string, format: date-time}
+        approved_by: {type: string, format: uuid}
+        approved_at: {type: string, format: date-time}
+        rejected_by: {type: string, format: uuid}
+        rejected_at: {type: string, format: date-time}
+        revoked_by: {type: string, format: uuid}
+        revoked_at: {type: string, format: date-time}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    ChangeEventAuthorization:
+      type: object
+      required: [event_id, authorization_id, linked_by, linked_at, attestation]
+      properties:
+        event_id: {type: string, format: uuid}
+        authorization_id: {type: string, format: uuid}
+        linked_by: {type: string, format: uuid}
+        linked_at: {type: string, format: date-time}
+        attestation: {type: string, enum: [reviewed_change_items_against_ticket]}
+    ChangeAuthorizationHistory:
+      type: object
+      required: [id, authorization_id, action, actor_user_id, occurred_at]
+      properties:
+        id: {type: string, format: uuid}
+        authorization_id: {type: string, format: uuid}
+        event_id: {type: string, format: uuid}
+        action: {type: string, enum: [requested, approved, rejected, revoked, linked]}
+        actor_user_id: {type: string, format: uuid}
+        occurred_at: {type: string, format: date-time}
+    ChangeEvent:
+      type: object
+      required: [id, device_id, config_type, from_backup_id, to_backup_id, detected_at, added_lines, removed_lines, authorization_status, policy_status, created_at, updated_at, analysis_version, item_count]
+      properties:
+        id: {type: string, format: uuid}
+        device_id: {type: string, format: uuid}
+        config_type: {type: string, enum: [running, startup]}
+        from_backup_id: {type: string, format: uuid}
+        to_backup_id: {type: string, format: uuid}
+        detected_at: {type: string, format: date-time, description: 'Aegis observation timestamp, not exact device command execution time.'}
+        added_lines: {type: integer, minimum: 0}
+        removed_lines: {type: integer, minimum: 0}
+        authorization_status: {type: string, enum: [unaccounted, authorized]}
+        policy_status: {type: string, enum: [not_evaluated, pass, violation]}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        analysis_version: {type: integer, minimum: 0}
+        analyzed_at: {type: string, format: date-time}
+        item_count: {type: integer, minimum: 0}
+    ChangeEventItem:
+      type: object
+      required: [id, change_event_id, ordinal, operation, context_path, command, sensitive, created_at, classification_version, category, subcategory, classification_rule]
+      properties:
+        id: {type: string, format: uuid}
+        change_event_id: {type: string, format: uuid}
+        ordinal: {type: integer, minimum: 0}
+        operation: {type: string, enum: [add, remove]}
+        context_path: {type: array, items: {type: string}, description: Sanitized context only.}
+        command: {type: string, description: Sanitized command only.}
+        sensitive: {type: boolean}
+        created_at: {type: string, format: date-time}
+        classification_version: {type: integer, minimum: 0}
+        category: {type: string}
+        subcategory: {type: string}
+        classification_rule: {type: string}
+        classified_at: {type: string, format: date-time}
     LoginRequest:
       type: object
       additionalProperties: false
@@ -411,6 +697,13 @@ components:
             message: {type: string}
             request_id: {type: string, format: uuid}
   responses:
+    ChangeAuthorizationResponse: {description: Scoped authorization request, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ChangeAuthorization'}}}]}}}}
+    ChangeAuthorizationListResponse: {description: Paginated scoped authorization requests, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/ChangeAuthorization'}}}}]}}}}
+    ChangeEventResponse: {description: Scoped change event without raw configuration, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ChangeEvent'}}}]}}}}
+    ChangeEventListResponse: {description: Paginated scoped change events, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/ChangeEvent'}}}}]}}}}
+    ChangeEventItemsResponse: {description: Paginated sanitized items in ordinal order, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/ChangeEventItem'}}}}]}}}}
+    ChangeEventAuthorizationResponse: {description: Immutable recorded authorization link, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ChangeEventAuthorization'}}}]}}}}
+    ChangeAuthorizationHistoryResponse: {description: Paginated append-only history ordered by action time then insertion order, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/ChangeAuthorizationHistory'}}}}]}}}}
     DataResponse: {description: Successful response, content: {application/json: {schema: {$ref: '#/components/schemas/DataEnvelope'}}}}
     ListResponse: {description: Paginated response, content: {application/json: {schema: {$ref: '#/components/schemas/DataEnvelope'}}}}
     DeviceResponse: {description: Device, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/Device'}}}]}}}}
