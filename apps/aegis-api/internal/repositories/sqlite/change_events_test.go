@@ -92,7 +92,7 @@ func TestChangeEventMigrationUpgradePreservesHistoricalBackups(t *testing.T) {
 	require.Zero(t, total) // Structure only; historical backups are not backfilled.
 	var count int
 	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count))
-	require.Equal(t, 4, count)
+	require.Equal(t, 5, count)
 }
 
 func TestChangeEventRepositoryReadsAndFilters(t *testing.T) {

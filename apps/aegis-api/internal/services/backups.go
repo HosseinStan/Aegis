@@ -105,10 +105,14 @@ func (s *BackupService) Create(ctx context.Context, principal domain.Principal, 
 		event.ItemCount = len(analysis)
 		items = make([]domain.ChangeEventItem, len(analysis))
 		for ordinal, item := range analysis {
+			classification := changes.Classify(item.ContextPath, item.Command)
 			items[ordinal] = domain.ChangeEventItem{
 				ID: uuid.NewString(), ChangeEventID: event.ID, Ordinal: ordinal,
 				Operation: item.Operation, ContextPath: item.ContextPath,
 				Command: item.Command, Sensitive: item.Sensitive, CreatedAt: now,
+				ClassificationVersion: domain.ChangeClassificationVersion,
+				Category:              classification.Category, Subcategory: classification.Subcategory,
+				ClassificationRule: classification.RuleID, ClassifiedAt: &now,
 			}
 		}
 	}

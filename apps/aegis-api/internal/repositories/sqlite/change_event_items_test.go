@@ -27,6 +27,9 @@ func analysisFixture(t *testing.T, s *Store, deviceID string) (domain.ConfigBack
 		{ID: "item-z", ChangeEventID: event.ID, Ordinal: 0, Operation: domain.ChangeOperationRemove, ContextPath: []string{"interface \"A\"", "sub\\mode"}, Command: "description old", CreatedAt: to.CreatedAt},
 		{ID: "item-a", ChangeEventID: event.ID, Ordinal: 1, Operation: domain.ChangeOperationAdd, ContextPath: []string{}, Command: "enable secret <redacted>", Sensitive: true, CreatedAt: to.CreatedAt},
 	}
+	for i := range items {
+		items[i].Category, items[i].Subcategory = domain.ChangeCategoryUnclassified, "unclassified"
+	}
 	return to, event, items
 }
 
@@ -80,7 +83,7 @@ func TestChangeEventItemsMigrationPreservesUnanalyzedEvents(t *testing.T) {
 	require.Equal(t, to, backup)
 	var count int
 	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count))
-	require.Equal(t, 4, count)
+	require.Equal(t, 5, count)
 }
 
 func TestChangeEventItemsRepositoryPagingAndMetadata(t *testing.T) {

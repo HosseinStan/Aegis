@@ -85,6 +85,30 @@ func validateChangeAnalysis(b domain.ConfigBackup, event *domain.ChangeEvent, it
 		if command != item.Command || !slices.Equal(path, item.ContextPath) || (sensitive && !item.Sensitive) {
 			return domain.ErrValidation
 		}
+		if err := validateItemClassification(item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateItemClassification(item domain.ChangeEventItem) error {
+	switch item.ClassificationVersion {
+	case 0:
+		if item.Category != domain.ChangeCategoryUnclassified || item.Subcategory != "unclassified" ||
+			item.ClassificationRule != "" || item.ClassifiedAt != nil {
+			return domain.ErrValidation
+		}
+	case domain.ChangeClassificationVersion:
+		if item.ClassifiedAt == nil {
+			return domain.ErrValidation
+		}
+		result := changes.Classify(item.ContextPath, item.Command)
+		if item.Category != result.Category || item.Subcategory != result.Subcategory || item.ClassificationRule != result.RuleID {
+			return domain.ErrValidation
+		}
+	default:
+		return domain.ErrValidation
 	}
 	return nil
 }

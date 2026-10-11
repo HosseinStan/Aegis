@@ -12,7 +12,8 @@ import (
 var _ repositories.ChangeEventItemRepository = (*Store)(nil)
 
 const changeEventItemColumns = `id, change_event_id, ordinal, operation,
-    context_path_json, command, sensitive, created_at`
+    context_path_json, command, sensitive, created_at,
+    classification_version, category, subcategory, classification_rule, classified_at`
 
 func insertChangeEventItem(ctx context.Context, tx *sql.Tx, item domain.ChangeEventItem) error {
 	path := item.ContextPath
@@ -23,9 +24,14 @@ func insertChangeEventItem(ctx context.Context, tx *sql.Tx, item domain.ChangeEv
 	if err != nil {
 		return domain.ErrValidation
 	}
+	var classifiedAt any
+	if item.ClassifiedAt != nil {
+		classifiedAt = timestamp(*item.ClassifiedAt)
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO change_event_items (`+changeEventItemColumns+`)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, item.ID, item.ChangeEventID, item.Ordinal,
-		item.Operation, string(encoded), item.Command, item.Sensitive, timestamp(item.CreatedAt))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, item.ID, item.ChangeEventID, item.Ordinal,
+		item.Operation, string(encoded), item.Command, item.Sensitive, timestamp(item.CreatedAt),
+		item.ClassificationVersion, item.Category, item.Subcategory, item.ClassificationRule, classifiedAt)
 	return repositoryError(mapWriteError(err))
 }
 
@@ -44,8 +50,10 @@ func (s *Store) ListChangeEventItems(ctx context.Context, eventID string, page r
 	for rows.Next() {
 		var item domain.ChangeEventItem
 		var encoded, createdAt string
+		var classifiedAt sql.NullString
 		if err := rows.Scan(&item.ID, &item.ChangeEventID, &item.Ordinal, &item.Operation,
-			&encoded, &item.Command, &item.Sensitive, &createdAt); err != nil {
+			&encoded, &item.Command, &item.Sensitive, &createdAt, &item.ClassificationVersion,
+			&item.Category, &item.Subcategory, &item.ClassificationRule, &classifiedAt); err != nil {
 			return nil, 0, repositoryError(err)
 		}
 		if err := json.Unmarshal([]byte(encoded), &item.ContextPath); err != nil {
@@ -55,6 +63,9 @@ func (s *Store) ListChangeEventItems(ctx context.Context, eventID string, page r
 			item.ContextPath = []string{}
 		}
 		if item.CreatedAt, err = parseTime(createdAt); err != nil {
+			return nil, 0, err
+		}
+		if item.ClassifiedAt, err = parseNullableTime(classifiedAt); err != nil {
 			return nil, 0, err
 		}
 		items = append(items, item)
