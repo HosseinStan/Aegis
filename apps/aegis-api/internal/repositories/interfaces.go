@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"time"
 
 	"company.local/aegis/apps/aegis-api/internal/domain"
 )
@@ -82,4 +83,21 @@ type ChangeEventRepository interface {
 
 type ChangeEventItemRepository interface {
 	ListChangeEventItems(context.Context, string, Page) ([]domain.ChangeEventItem, int, error)
+}
+
+type ChangeAuthorizationFilter struct {
+	Status     string
+	ConfigType string
+}
+
+// Writes take server-generated timestamps and the authenticated actor's ID.
+// Implementations must recheck eligibility and persist history atomically.
+type ChangeAuthorizationRepository interface {
+	CreateChangeAuthorization(context.Context, domain.ChangeAuthorization) error
+	GetChangeAuthorization(context.Context, string, string) (domain.ChangeAuthorization, error)
+	ListChangeAuthorizations(context.Context, string, ChangeAuthorizationFilter, Page) ([]domain.ChangeAuthorization, int, error)
+	TransitionChangeAuthorization(context.Context, string, string, string, string, time.Time) (domain.ChangeAuthorization, error)
+	LinkChangeEventAuthorization(context.Context, string, domain.ChangeEventAuthorization) error
+	GetChangeEventAuthorization(context.Context, string, string) (domain.ChangeEventAuthorization, error)
+	ListChangeAuthorizationHistory(context.Context, string, string, Page) ([]domain.ChangeAuthorizationHistory, int, error)
 }

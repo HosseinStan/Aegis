@@ -77,6 +77,7 @@ func Routes(handler *Handler, metrics *observability.Metrics, config RouterConfi
 		protected.With(appmiddleware.Require("devices.read"), appmiddleware.Require("backups.read")).Get("/api/v1/devices/{deviceID}/backups/{leftID}/diff/{rightID}", handler.DiffBackups)
 		protected.With(appmiddleware.Require("audit.read")).Get("/api/v1/audit-logs", handler.ListAudits)
 		protected.With(appmiddleware.Require("audit.read")).Get("/api/v1/audit-logs/{auditID}", handler.GetAudit)
+		changeAuthorizationRoutes(protected, handler)
 		if config.MetricsEnabled {
 			protected.With(appmiddleware.Require("system.manage")).Handle("/metrics", metrics)
 		}
@@ -84,6 +85,23 @@ func Routes(handler *Handler, metrics *observability.Metrics, config RouterConfi
 
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) { WriteError(w, r, domain.ErrNotFound) })
 	return router
+}
+
+func changeAuthorizationRoutes(r chi.Router, h *Handler) {
+	requests := "/api/v1/devices/{deviceID}/change-authorizations"
+	events := "/api/v1/devices/{deviceID}/change-events"
+	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require(domain.PermissionAuthorizationRead)).Get(requests, h.ListChangeAuthorizations)
+	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require(domain.PermissionAuthorizationRequest)).Post(requests, h.CreateChangeAuthorization)
+	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require(domain.PermissionAuthorizationRead)).Get(requests+"/{authorizationID}", h.GetChangeAuthorization)
+	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require(domain.PermissionAuthorizationRead)).Get(requests+"/{authorizationID}/history", h.ChangeAuthorizationHistory)
+	for _, action := range []string{"approve", "reject", "revoke"} {
+		r.With(appmiddleware.Require("devices.read"), appmiddleware.Require(domain.PermissionAuthorizationApprove)).Post(requests+"/{authorizationID}/"+action, h.ChangeAuthorizationAction(action))
+	}
+	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require("backups.read")).Get(events, h.ListChangeEvents)
+	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require("backups.read")).Get(events+"/{eventID}", h.GetChangeEvent)
+	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require("backups.read")).Get(events+"/{eventID}/items", h.ListChangeEventItems)
+	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require("backups.read"), appmiddleware.Require(domain.PermissionAuthorizationReconcile)).Post(events+"/{eventID}/authorize", h.AuthorizeChangeEvent)
+	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require(domain.PermissionAuthorizationRead)).Get(events+"/{eventID}/authorization", h.ChangeAuthorizationEvidence)
 }
 
 func (h *Handler) OpenAPI(w http.ResponseWriter, r *http.Request) {

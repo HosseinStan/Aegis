@@ -91,7 +91,7 @@ func TestClassificationMigrationPreservesTaskTwoItemsWithoutBackfill(t *testing.
 	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count))
 	require.Equal(t, oldRoot, root)       // No table rebuild.
 	require.Equal(t, oldIndexes, indexes) // No speculative indexes.
-	require.Equal(t, 5, count)
+	require.Equal(t, 6, count)
 }
 
 func TestClassifiedItemsRoundTripOnFreshDatabase(t *testing.T) {
@@ -118,7 +118,7 @@ func TestClassifiedItemsRoundTripOnFreshDatabase(t *testing.T) {
 	require.Equal(t, 2, total)
 	var migrations int
 	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&migrations))
-	require.Equal(t, 5, migrations)
+	require.Equal(t, 6, migrations)
 }
 
 func TestClassificationValidationRejectsSpoofedOrNonLegacyMetadata(t *testing.T) {
