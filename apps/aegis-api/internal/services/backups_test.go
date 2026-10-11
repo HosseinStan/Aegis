@@ -113,6 +113,7 @@ func TestBackupChangeDetectionAndAdjacentChain(t *testing.T) {
 	require.Equal(t, 3, itemTotal)
 	require.Equal(t, itemTotal, event.ItemCount)
 	for ordinal, item := range items {
+		requireClassifiedItem(t, item)
 		require.Equal(t, event.ID, item.ChangeEventID)
 		require.Equal(t, ordinal, item.Ordinal)
 		require.Equal(t, []string{"interface Gi1/0/1"}, item.ContextPath)
@@ -260,9 +261,17 @@ func TestConcurrentBackupsCreateOneEvent(t *testing.T) {
 		}
 	}
 	require.Equal(t, 1, created)
-	_, total, err := store.ListChangeEvents(ctx, repositories.ChangeEventFilter{}, repositories.Page{Limit: 10})
+	events, total, err := store.ListChangeEvents(ctx, repositories.ChangeEventFilter{}, repositories.Page{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, 1, total)
+	items, itemTotal, err := store.ListChangeEventItems(ctx, events[0].ID, repositories.Page{Limit: 100})
+	require.NoError(t, err)
+	require.Equal(t, 4, itemTotal)
+	require.Equal(t, events[0].ItemCount, itemTotal)
+	for ordinal, item := range items {
+		require.Equal(t, ordinal, item.Ordinal)
+		requireClassifiedItem(t, item)
+	}
 	require.Len(t, backupFiles(t, s.root), 2)
 }
 

@@ -133,14 +133,19 @@ type ChangeEvent struct {
 }
 
 type ChangeEventItem struct {
-	ID            string    `json:"id"`
-	ChangeEventID string    `json:"change_event_id"`
-	Ordinal       int       `json:"ordinal"`
-	Operation     string    `json:"operation"`
-	ContextPath   []string  `json:"context_path"`
-	Command       string    `json:"command"`
-	Sensitive     bool      `json:"sensitive"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID                    string     `json:"id"`
+	ChangeEventID         string     `json:"change_event_id"`
+	Ordinal               int        `json:"ordinal"`
+	Operation             string     `json:"operation"`
+	ContextPath           []string   `json:"context_path"`
+	Command               string     `json:"command"`
+	Sensitive             bool       `json:"sensitive"`
+	CreatedAt             time.Time  `json:"created_at"`
+	ClassificationVersion int        `json:"classification_version"`
+	Category              string     `json:"category"`
+	Subcategory           string     `json:"subcategory"`
+	ClassificationRule    string     `json:"classification_rule"`
+	ClassifiedAt          *time.Time `json:"classified_at,omitempty"`
 }
 
 type ConfigResult struct {
