@@ -78,6 +78,7 @@ func Routes(handler *Handler, metrics *observability.Metrics, config RouterConfi
 		protected.With(appmiddleware.Require("audit.read")).Get("/api/v1/audit-logs", handler.ListAudits)
 		protected.With(appmiddleware.Require("audit.read")).Get("/api/v1/audit-logs/{auditID}", handler.GetAudit)
 		changeAuthorizationRoutes(protected, handler)
+		changePolicyRoutes(protected, handler)
 		if config.MetricsEnabled {
 			protected.With(appmiddleware.Require("system.manage")).Handle("/metrics", metrics)
 		}
@@ -102,6 +103,31 @@ func changeAuthorizationRoutes(r chi.Router, h *Handler) {
 	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require("backups.read")).Get(events+"/{eventID}/items", h.ListChangeEventItems)
 	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require("backups.read"), appmiddleware.Require(domain.PermissionAuthorizationReconcile)).Post(events+"/{eventID}/authorize", h.AuthorizeChangeEvent)
 	r.With(appmiddleware.Require("devices.read"), appmiddleware.Require(domain.PermissionAuthorizationRead)).Get(events+"/{eventID}/authorization", h.ChangeAuthorizationEvidence)
+}
+
+func changePolicyRoutes(r chi.Router, h *Handler) {
+	policies := "/api/v1/devices/{deviceID}/change-policies"
+	evaluation := "/api/v1/devices/{deviceID}/change-events/{eventID}/policy-evaluation"
+	read := []func(http.Handler) http.Handler{h.policyAudit("read"), appmiddleware.Require("devices.read"), appmiddleware.Require(domain.PermissionPolicyRead)}
+	manage := func(action string) []func(http.Handler) http.Handler {
+		return []func(http.Handler) http.Handler{
+			h.policyAudit(action), appmiddleware.Require("devices.read"), appmiddleware.Require(domain.PermissionPolicyManage)}
+	}
+	evaluate := func(action string) []func(http.Handler) http.Handler {
+		return []func(http.Handler) http.Handler{
+			h.policyAudit(action), appmiddleware.Require("devices.read"), appmiddleware.Require("backups.read"), appmiddleware.Require(domain.PermissionPolicyEvaluate)}
+	}
+	r.With(manage("create")...).Post(policies, h.CreateChangePolicy)
+	r.With(read...).Get(policies, h.ListChangePolicies)
+	r.With(read...).Get(policies+"/{policyID}", h.GetChangePolicy)
+	for _, action := range []string{"activate", "retire"} {
+		r.With(manage(action)...).Post(policies+"/{policyID}/"+action, h.ChangePolicyAction(action))
+	}
+	r.With(evaluate("preview")...).Post(evaluation+"/preview", h.EvaluateChangePolicy(true))
+	r.With(evaluate("evaluate")...).Post(evaluation, h.EvaluateChangePolicy(false))
+	evidenceRead := append(read[:len(read):len(read)], appmiddleware.Require("backups.read"))
+	r.With(evidenceRead...).Get(evaluation, h.ChangePolicyEvidence)
+	r.With(evidenceRead...).Get(evaluation+"/items", h.ChangePolicyEvidenceItems)
 }
 
 func (h *Handler) OpenAPI(w http.ResponseWriter, r *http.Request) {
