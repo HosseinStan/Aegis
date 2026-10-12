@@ -101,3 +101,23 @@ type ChangeAuthorizationRepository interface {
 	GetChangeEventAuthorization(context.Context, string, string) (domain.ChangeEventAuthorization, error)
 	ListChangeAuthorizationHistory(context.Context, string, string, Page) ([]domain.ChangeAuthorizationHistory, int, error)
 }
+
+type PolicySetFilter struct {
+	Status     string
+	ConfigType string
+}
+
+// Final evaluation reloads evidence, policy and live actor grants in its write
+// transaction and recomputes the result. No caller-supplied result is trusted.
+type ChangePolicyRepository interface {
+	CreatePolicySet(context.Context, domain.PolicySet) error
+	GetPolicySet(context.Context, string, string) (domain.PolicySet, error)
+	ListPolicySets(context.Context, string, PolicySetFilter, Page) ([]domain.PolicySet, int, error)
+	ActivatePolicySet(context.Context, string, string, string, time.Time) (domain.PolicySet, error)
+	RetirePolicySet(context.Context, string, string, string, time.Time) (domain.PolicySet, error)
+	GetActivePolicySet(context.Context, string, string) (domain.PolicySet, error)
+	PreviewPolicyEvaluation(context.Context, string, string, string) (domain.PolicyEvaluationPreview, error)
+	PersistPolicyEvaluation(context.Context, string, string, string, time.Time) (domain.ChangePolicyEvaluation, error)
+	GetPolicyEvaluation(context.Context, string, string) (domain.ChangePolicyEvaluation, error)
+	ListPolicyEvaluationItems(context.Context, string, string, Page) ([]domain.ChangePolicyEvaluationItem, int, error)
+}

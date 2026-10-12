@@ -16,7 +16,145 @@ tags:
   - name: Backups
   - name: Credentials
   - name: Audit
+  - name: Change Policies
 paths:
+  /api/v1/devices/{deviceID}/change-policies:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+    post:
+      tags: [Change Policies]
+      summary: Create an immutable draft policy
+      description: Requires devices.read and changes.policy.manage and current device-group access. Definition is immutable from creation; no default or automatic activation.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/PolicySetCreate'}}}
+      responses:
+        '201': {$ref: '#/components/responses/PolicySetResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    get:
+      tags: [Change Policies]
+      summary: List device-scoped policies
+      description: Requires devices.read and changes.policy.read and current device-group access. Returns draft, active and retired definitions without configuration material.
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Offset'}
+        - {in: query, name: status, schema: {type: string, enum: [draft, active, retired]}}
+        - {in: query, name: config_type, schema: {type: string, enum: [running, startup]}}
+      responses:
+        '200': {$ref: '#/components/responses/PolicySetListResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/devices/{deviceID}/change-policies/{policyID}:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/PolicyID'}
+    get:
+      tags: [Change Policies]
+      summary: Read an immutable policy definition
+      description: Requires devices.read and changes.policy.read and current device-group access. Cross-device IDs return not found.
+      responses:
+        '200': {$ref: '#/components/responses/PolicySetResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+  /api/v1/devices/{deviceID}/change-policies/{policyID}/activate:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/PolicyID'}
+    post:
+      tags: [Change Policies]
+      summary: Activate a validated draft policy
+      description: Requires devices.read and changes.policy.manage and current device-group access. Only draft to active; exactly one active policy per device/config type. Server records actor and activation time. Activation cannot retroactively evaluate older observations.
+      requestBody: {required: false, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyEmptyAction'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/PolicySetResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}/change-policies/{policyID}/retire:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/PolicyID'}
+    post:
+      tags: [Change Policies]
+      summary: Retire an active policy
+      description: Requires devices.read and changes.policy.manage and current device-group access. Only active to retired; retirement prevents new evaluations but preserves all historical snapshots and outcomes. No restore, edit or delete operation.
+      requestBody: {required: false, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyEmptyAction'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/PolicySetResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/policy-evaluation/preview:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/EventID'}
+    post:
+      tags: [Change Policies]
+      summary: Preview policy evaluation without persistence
+      description: Requires devices.read, backups.read and changes.policy.evaluate and current device-group access. Repeatable read-only preview, including already-evaluated events; existing_evaluation identifies immutable final evidence. Does not change event status or technical history. Only current active policy activated no later than DetectedAt is eligible. DetectedAt is observation time, not proof of command execution time. Invalid/corrupt evidence fails closed.
+      requestBody: {required: false, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyEmptyAction'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/PolicyPreviewResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/policy-evaluation:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/EventID'}
+    post:
+      tags: [Change Policies]
+      summary: Explicitly persist one final policy evaluation
+      description: Requires devices.read, backups.read and changes.policy.evaluate and current device-group access. Server selects active policy and rechecks actor, sanitized classified evidence, definition hash and ActivatedAt <= DetectedAt in one write transaction. Exactly one final evaluation per event; repeat conflicts. pass requires nonempty valid evidence and every item explicitly allowed with no denied or uncovered items. Any explicit deny yields violation, retaining uncovered counts. Uncovered-only, absent policy, zero-item and legacy results are not_evaluated and cannot persist. Atomic evidence and policy_status update; authorization_status and authorization history are independent. PASS means only these observed items were allowed, not device security, CIS compliance, authorization or zero risk.
+      requestBody: {required: false, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyEmptyAction'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/PolicyEvaluationResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    get:
+      tags: [Change Policies]
+      summary: Read immutable final evaluation evidence
+      description: Requires devices.read, backups.read and changes.policy.read and current device-group access. Snapshot and hash describe the exact evaluated definition even after retirement. No raw commands or configuration are copied into evidence.
+      responses:
+        '200': {$ref: '#/components/responses/PolicyEvaluationResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/policy-evaluation/items:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/EventID'}
+    get:
+      tags: [Change Policies]
+      summary: Read ordered immutable per-item policy evidence
+      description: Requires devices.read, backups.read and changes.policy.read and current device-group access. Paged ordinal order; contains IDs, category/operation, decision and derived rule key only, never Command or ContextPath copies.
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Offset'}
+      responses:
+        '200': {$ref: '#/components/responses/PolicyEvaluationItemsResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /healthz:
     get:
       summary: Process liveness
@@ -480,6 +618,7 @@ components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
   parameters:
+    PolicyID: {name: policyID, in: path, required: true, schema: {type: string, format: uuid}}
     DeviceID: {name: deviceID, in: path, required: true, schema: {type: string, format: uuid}}
     CredentialID: {name: credentialID, in: path, required: true, schema: {type: string, format: uuid}}
     BackupID: {name: backupID, in: path, required: true, schema: {type: string, format: uuid}}
@@ -489,6 +628,115 @@ components:
     Offset: {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
     Refresh: {name: refresh, in: query, schema: {type: boolean, default: false}}
   schemas:
+    PolicyEmptyAction:
+      type: object
+      additionalProperties: false
+      description: Empty body or empty object only. Policy ID, outcome, hash, actor and timestamps are never accepted.
+    PolicyCategory:
+      type: string
+      enum: [system, interface, switching, routing, access_control, aaa, management, monitoring, services, crypto_vpn, qos, redundancy, other]
+      description: Existing deterministic classification taxonomy. other is explicit, never a wildcard. unclassified is unsupported.
+    PolicyRule:
+      type: object
+      additionalProperties: false
+      required: [category, operation, decision]
+      properties:
+        category: {$ref: '#/components/schemas/PolicyCategory'}
+        operation: {type: string, enum: [add, remove]}
+        decision: {type: string, enum: [allow, deny]}
+    PolicySetCreate:
+      type: object
+      additionalProperties: false
+      required: [reference, config_type, rules]
+      description: Reference trimmed/ASCII uppercase, globally case-insensitive unique. Categories trimmed/lowercase. Operations and decisions must be exact lowercase. Duplicate/conflicting category-operation tuples rejected. Rules sorted category then operation; server derives policy.category.operation keys.
+      properties:
+        reference: {type: string, minLength: 3, maxLength: 64, pattern: '^[A-Za-z0-9._:-]+$'}
+        config_type: {type: string, enum: [running, startup]}
+        rules: {type: array, minItems: 1, maxItems: 26, items: {$ref: '#/components/schemas/PolicyRule'}}
+    PolicyDefinition:
+      type: object
+      additionalProperties: false
+      required: [engine_version, device_id, config_type, rules]
+      description: Canonical compact JSON in this field order, rules sorted category then operation. SHA-256 lowercase hex includes scope/version/rules/decisions, excludes identity/lifecycle/user/times. Integrity and reproducibility, not protection against a malicious database administrator.
+      properties:
+        engine_version: {type: integer, const: 1}
+        device_id: {type: string, format: uuid}
+        config_type: {type: string, enum: [running, startup]}
+        rules: {type: array, minItems: 1, maxItems: 26, items: {$ref: '#/components/schemas/PolicyRule'}}
+    PolicySet:
+      type: object
+      required: [id, reference, device_id, config_type, status, engine_version, rules, definition_hash, created_by, created_at, updated_at]
+      description: Immutable definition; draft to active to retired only. Operator read, network administrator read/evaluate, system administrator read/manage/evaluate; viewer has no policy grants.
+      properties:
+        id: {type: string, format: uuid}
+        reference: {type: string}
+        device_id: {type: string, format: uuid}
+        config_type: {type: string, enum: [running, startup]}
+        status: {type: string, enum: [draft, active, retired]}
+        engine_version: {type: integer, const: 1}
+        rules: {type: array, items: {$ref: '#/components/schemas/PolicyRule'}}
+        definition_hash: {type: string, pattern: '^[a-f0-9]{64}$'}
+        created_by: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+        activated_by: {type: string, format: uuid}
+        activated_at: {type: string, format: date-time}
+        retired_by: {type: string, format: uuid}
+        retired_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    PolicyItemResult:
+      type: object
+      required: [item_id, ordinal, category, operation, decision, matched_rule_key]
+      properties:
+        item_id: {type: string, format: uuid}
+        ordinal: {type: integer, minimum: 0}
+        category: {$ref: '#/components/schemas/PolicyCategory'}
+        operation: {type: string, enum: [add, remove]}
+        decision: {type: string, enum: [allow, deny, uncovered]}
+        matched_rule_key: {type: string, description: Derived policy.category.operation for matched items; empty for uncovered.}
+    PolicyEvaluationPreview:
+      type: object
+      required: [event_id, outcome, item_results, total_items, allowed_count, denied_count, uncovered_count]
+      properties:
+        event_id: {type: string, format: uuid}
+        policy_set_id: {type: string, format: uuid}
+        policy_definition_hash: {type: string, pattern: '^[a-f0-9]{64}$'}
+        outcome: {type: string, enum: [not_evaluated, pass, violation]}
+        reason: {type: string, enum: [no_active_policy, uncovered_items, legacy_classification, invalid_evidence]}
+        item_results: {type: array, items: {$ref: '#/components/schemas/PolicyItemResult'}}
+        total_items: {type: integer, minimum: 0}
+        allowed_count: {type: integer, minimum: 0}
+        denied_count: {type: integer, minimum: 0}
+        uncovered_count: {type: integer, minimum: 0}
+        existing_evaluation: {$ref: '#/components/schemas/ChangePolicyEvaluation'}
+    ChangePolicyEvaluation:
+      type: object
+      required: [id, event_id, policy_set_id, engine_version, policy_definition_hash, policy_definition_snapshot, result, total_items, allowed_count, denied_count, uncovered_count, evaluated_by, evaluated_at]
+      properties:
+        id: {type: string, format: uuid}
+        event_id: {type: string, format: uuid}
+        policy_set_id: {type: string, format: uuid}
+        engine_version: {type: integer, const: 1}
+        policy_definition_hash: {type: string, pattern: '^[a-f0-9]{64}$'}
+        policy_definition_snapshot: {type: string, description: Exact compact canonical JSON PolicyDefinition used in this immutable final evaluation.}
+        result: {type: string, enum: [pass, violation]}
+        total_items: {type: integer, minimum: 1}
+        allowed_count: {type: integer, minimum: 0}
+        denied_count: {type: integer, minimum: 0}
+        uncovered_count: {type: integer, minimum: 0}
+        evaluated_by: {type: string, format: uuid}
+        evaluated_at: {type: string, format: date-time}
+    ChangePolicyEvaluationItem:
+      type: object
+      required: [evaluation_id, event_id, change_event_item_id, ordinal, category, operation, decision, matched_rule_key]
+      properties:
+        evaluation_id: {type: string, format: uuid}
+        event_id: {type: string, format: uuid}
+        change_event_item_id: {type: string, format: uuid}
+        ordinal: {type: integer, minimum: 0}
+        category: {$ref: '#/components/schemas/PolicyCategory'}
+        operation: {type: string, enum: [add, remove]}
+        decision: {type: string, enum: [allow, deny, uncovered]}
+        matched_rule_key: {type: string}
     ChangeAuthorizationCreate:
       type: object
       additionalProperties: false
@@ -697,6 +945,11 @@ components:
             message: {type: string}
             request_id: {type: string, format: uuid}
   responses:
+    PolicySetResponse: {description: Immutable scoped policy definition and lifecycle, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/PolicySet'}}}]}}}}
+    PolicySetListResponse: {description: Paginated scoped immutable policies, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/PolicySet'}}}}]}}}}
+    PolicyPreviewResponse: {description: Read-only deterministic preview and existing final evidence if any, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/PolicyEvaluationPreview'}}}]}}}}
+    PolicyEvaluationResponse: {description: Immutable final policy evaluation, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ChangePolicyEvaluation'}}}]}}}}
+    PolicyEvaluationItemsResponse: {description: Paginated ordinal-ordered immutable item decisions, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/ChangePolicyEvaluationItem'}}}}]}}}}
     ChangeAuthorizationResponse: {description: Scoped authorization request, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ChangeAuthorization'}}}]}}}}
     ChangeAuthorizationListResponse: {description: Paginated scoped authorization requests, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/ChangeAuthorization'}}}}]}}}}
     ChangeEventResponse: {description: Scoped change event without raw configuration, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/ChangeEvent'}}}]}}}}

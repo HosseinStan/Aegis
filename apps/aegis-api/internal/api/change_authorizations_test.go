@@ -80,6 +80,7 @@ func newAuthorizationAPI(t *testing.T) authorizationAPI {
 	require.NoError(t, err)
 	h := &Handler{Auth: authService, Credentials: credentialStore, Devices: devices, Configs: configs, Backups: backups, Audits: store, Health: store, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	h.ChangeAuthorizations = services.NewChangeAuthorizationService(store, store, store, store, store, func() time.Time { return *a.now })
+	h.ChangePolicies = services.NewChangePolicyService(store, store, store, func() time.Time { return *a.now })
 	a.server = httptest.NewServer(Routes(h, &observability.Metrics{}, RouterConfig{RequestTimeout: 10 * time.Second}))
 	t.Cleanup(a.server.Close)
 	return a
