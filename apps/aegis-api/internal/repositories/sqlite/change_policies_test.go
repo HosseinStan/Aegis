@@ -547,6 +547,7 @@ func TestPolicyMigrationPreservesAllLegacyEvidenceAndGrants(t *testing.T) {
 	var root, grants int
 	require.NoError(t, db.QueryRow(`SELECT rootpage FROM sqlite_master WHERE name='change_events'`).Scan(&root))
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM role_permissions`).Scan(&grants))
+	oldGrants := policyMigrationGrantIdentities(t, db)
 	require.NoError(t, s.Close())
 	s, err = Open(ctx, path)
 	require.NoError(t, err)
@@ -569,10 +570,34 @@ func TestPolicyMigrationPreservesAllLegacyEvidenceAndGrants(t *testing.T) {
 	var newRoot, count int
 	require.NoError(t, s.db.QueryRow(`SELECT rootpage FROM sqlite_master WHERE name='change_events'`).Scan(&newRoot))
 	require.Equal(t, root, newRoot)
-	require.NoError(t, s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&count))
-	require.Equal(t, 7, count)
+	assertApprovedTaskSixMigrations(t, s.db)
 	require.NoError(t, s.db.QueryRow(`SELECT COUNT(*) FROM role_permissions`).Scan(&count))
-	require.Equal(t, grants+6, count)
+	require.Equal(t, grants+6+5, count, "six approved policy grants plus five approved risk grants")
+	newGrants := policyMigrationGrantIdentities(t, s.db)
+	require.Subset(t, newGrants, oldGrants, "every original role/permission identity pair survives")
+	grantRows, err := s.db.Query(`SELECT r.name||':'||p.name FROM role_permissions rp JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id WHERE p.name LIKE 'changes.policy.%' OR p.name LIKE 'changes.risk.%' ORDER BY r.name,p.name`)
+	require.NoError(t, err)
+	var addedGrants []string
+	for grantRows.Next() {
+		var grant string
+		require.NoError(t, grantRows.Scan(&grant))
+		addedGrants = append(addedGrants, grant)
+	}
+	require.NoError(t, grantRows.Err())
+	require.NoError(t, grantRows.Close())
+	require.Equal(t, []string{
+		"network_administrator:changes.policy.evaluate",
+		"network_administrator:changes.policy.read",
+		"network_administrator:changes.risk.evaluate",
+		"network_administrator:changes.risk.read",
+		"network_operator:changes.policy.read",
+		"network_operator:changes.risk.read",
+		"system_administrator:changes.policy.evaluate",
+		"system_administrator:changes.policy.manage",
+		"system_administrator:changes.policy.read",
+		"system_administrator:changes.risk.evaluate",
+		"system_administrator:changes.risk.read",
+	}, addedGrants, "exact approved 007+008 role grants; no broader grant drift")
 	for _, table := range []string{"change_policy_sets", "change_policy_evaluations", "change_policy_evaluation_items"} {
 		require.NoError(t, s.db.QueryRow(`SELECT COUNT(*) FROM `+table).Scan(&count))
 		require.Zero(t, count)
@@ -585,4 +610,19 @@ func TestPolicyMigrationPreservesAllLegacyEvidenceAndGrants(t *testing.T) {
 		require.NoError(t, s.db.QueryRow(`SELECT COUNT(*) FROM role_permissions rp JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id WHERE r.name=? AND p.name LIKE 'changes.policy.%'`, role).Scan(&count))
 		require.Equal(t, want, count)
 	}
+}
+
+func policyMigrationGrantIdentities(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+	rows, err := db.Query(`SELECT json_array(role_id,permission_id) FROM role_permissions ORDER BY role_id,permission_id`)
+	require.NoError(t, err)
+	defer rows.Close()
+	var grants []string
+	for rows.Next() {
+		var grant string
+		require.NoError(t, rows.Scan(&grant))
+		grants = append(grants, grant)
+	}
+	require.NoError(t, rows.Err())
+	return grants
 }

@@ -474,11 +474,10 @@ func TestAuthorizationMigrationUpgradeAndConstraints(t *testing.T) {
 	items, _, err := s.ListChangeEventItems(ctx, oldEvent.ID, repositories.Page{Limit: 10})
 	require.NoError(t, err)
 	require.Equal(t, oldItems, items)
-	var root, count, evidence int
+	var root, evidence int
 	require.NoError(t, s.db.QueryRow(`SELECT rootpage FROM sqlite_master WHERE name='change_events'`).Scan(&root))
 	require.Equal(t, oldRoot, root)
-	require.NoError(t, s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&count))
-	require.Equal(t, 7, count)
+	assertApprovedTaskSixMigrations(t, s.db)
 	require.NoError(t, s.db.QueryRow(`SELECT COUNT(*) FROM change_event_authorizations`).Scan(&evidence))
 	require.Zero(t, evidence)
 	rows, err := s.db.Query(`PRAGMA foreign_key_check`)

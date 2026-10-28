@@ -81,9 +81,7 @@ func TestChangeEventItemsMigrationPreservesUnanalyzedEvents(t *testing.T) {
 	backup, err := s.GetBackup(ctx, to.DeviceID, to.ID)
 	require.NoError(t, err)
 	require.Equal(t, to, backup)
-	var count int
-	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count))
-	require.Equal(t, 7, count)
+	assertApprovedTaskSixMigrations(t, s.db)
 }
 
 func TestChangeEventItemsRepositoryPagingAndMetadata(t *testing.T) {

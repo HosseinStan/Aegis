@@ -79,6 +79,7 @@ func Routes(handler *Handler, metrics *observability.Metrics, config RouterConfi
 		protected.With(appmiddleware.Require("audit.read")).Get("/api/v1/audit-logs/{auditID}", handler.GetAudit)
 		changeAuthorizationRoutes(protected, handler)
 		changePolicyRoutes(protected, handler)
+		changeRiskRoutes(protected, handler)
 		if config.MetricsEnabled {
 			protected.With(appmiddleware.Require("system.manage")).Handle("/metrics", metrics)
 		}

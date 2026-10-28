@@ -27,6 +27,34 @@ func classifiedAnalysisFixture(t *testing.T, s *Store, deviceID string) (domain.
 	return to, event, items
 }
 
+type classificationMigrationIndex struct {
+	Root int
+	SQL  sql.NullString
+}
+
+func classificationMigrationIndexes(t *testing.T, db *sql.DB) map[string]classificationMigrationIndex {
+	t.Helper()
+	rows, err := db.Query(`SELECT name,rootpage,sql FROM sqlite_master WHERE type='index' AND tbl_name='change_event_items' ORDER BY name`)
+	require.NoError(t, err)
+	defer rows.Close()
+	result := map[string]classificationMigrationIndex{}
+	for rows.Next() {
+		var name string
+		var index classificationMigrationIndex
+		require.NoError(t, rows.Scan(&name, &index.Root, &index.SQL))
+		result[name] = index
+	}
+	require.NoError(t, rows.Err())
+	return result
+}
+
+func classificationMigrationEvidence(t *testing.T, db *sql.DB) string {
+	t.Helper()
+	var raw string
+	require.NoError(t, db.QueryRow(`SELECT json_group_array(json_array(id,change_event_id,ordinal,operation,context_path_json,command,sensitive,created_at)) FROM (SELECT * FROM change_event_items ORDER BY change_event_id,ordinal,id)`).Scan(&raw))
+	return raw
+}
+
 func TestClassificationMigrationPreservesTaskTwoItemsWithoutBackfill(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "task-two.db")
@@ -62,6 +90,8 @@ func TestClassificationMigrationPreservesTaskTwoItemsWithoutBackfill(t *testing.
 	var oldRoot, oldIndexes int
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT rootpage FROM sqlite_master WHERE name = 'change_event_items'`).Scan(&oldRoot))
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = 'change_event_items'`).Scan(&oldIndexes))
+	oldIndexDefinitions := classificationMigrationIndexes(t, db)
+	oldEvidence := classificationMigrationEvidence(t, db)
 	require.NoError(t, s.Close())
 
 	s, err = Open(ctx, path)
@@ -85,13 +115,37 @@ func TestClassificationMigrationPreservesTaskTwoItemsWithoutBackfill(t *testing.
 	loadedBackup, err := s.GetBackup(ctx, to.DeviceID, to.ID)
 	require.NoError(t, err)
 	require.Equal(t, to, loadedBackup)
-	var root, indexes, count int
+	var root, indexes int
 	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT rootpage FROM sqlite_master WHERE name = 'change_event_items'`).Scan(&root))
 	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = 'change_event_items'`).Scan(&indexes))
-	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count))
-	require.Equal(t, oldRoot, root)       // No table rebuild.
-	require.Equal(t, oldIndexes, indexes) // No speculative indexes.
-	require.Equal(t, 7, count)
+	require.Equal(t, oldRoot, root) // No table rebuild.
+	require.Equal(t, oldIndexes+1, indexes, "only the approved risk item-scope index may be added")
+	indexDefinitions := classificationMigrationIndexes(t, s.db)
+	for name, definition := range oldIndexDefinitions {
+		require.Equal(t, definition, indexDefinitions[name], "original index identity, rootpage and SQL preserved: %s", name)
+	}
+	require.Len(t, indexDefinitions, len(oldIndexDefinitions)+1)
+	require.Contains(t, indexDefinitions, "change_risk_item_scope")
+	var unique, partial int
+	var origin string
+	require.NoError(t, s.db.QueryRow(`SELECT "unique",origin,partial FROM pragma_index_list('change_event_items') WHERE name='change_risk_item_scope'`).Scan(&unique, &origin, &partial))
+	require.Equal(t, 1, unique)
+	require.Equal(t, "c", origin)
+	require.Zero(t, partial)
+	rows, err := s.db.Query(`SELECT name FROM pragma_index_info('change_risk_item_scope') ORDER BY seqno`)
+	require.NoError(t, err)
+	var columns []string
+	for rows.Next() {
+		var column string
+		require.NoError(t, rows.Scan(&column))
+		columns = append(columns, column)
+	}
+	require.NoError(t, rows.Err())
+	require.NoError(t, rows.Close())
+	require.Equal(t, []string{"id", "change_event_id", "ordinal"}, columns)
+	require.Equal(t, oldEvidence, classificationMigrationEvidence(t, s.db), "original evidence values remain byte-identical")
+	assertApprovedTaskSixMigrations(t, s.db)
+	t.Logf("table rootpage %d -> %d; original indexes=%d preserved; exactly one added index change_risk_item_scope unique=%d partial=%d columns=%v; original evidence byte-identical", oldRoot, root, oldIndexes, unique, partial, columns)
 }
 
 func TestClassifiedItemsRoundTripOnFreshDatabase(t *testing.T) {
@@ -116,9 +170,7 @@ func TestClassifiedItemsRoundTripOnFreshDatabase(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, page)
 	require.Equal(t, 2, total)
-	var migrations int
-	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&migrations))
-	require.Equal(t, 7, migrations)
+	assertApprovedTaskSixMigrations(t, s.db)
 }
 
 func TestClassificationValidationRejectsSpoofedOrNonLegacyMetadata(t *testing.T) {

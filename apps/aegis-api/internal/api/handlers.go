@@ -28,6 +28,7 @@ type Handler struct {
 	Backups              *services.BackupService
 	ChangeAuthorizations *services.ChangeAuthorizationService
 	ChangePolicies       *services.ChangePolicyService
+	ChangeRisks          *services.ChangeRiskService
 	Audits               repositories.AuditRepository
 	Health               HealthStore
 	Logger               *slog.Logger

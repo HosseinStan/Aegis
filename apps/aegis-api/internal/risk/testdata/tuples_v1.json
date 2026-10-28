@@ -1,0 +1,749 @@
+[
+  {
+    "id": "T01",
+    "category": "aaa",
+    "subcategory": "global",
+    "classification_rule": "aaa.global",
+    "rule_id": "risk.tech.aaa.v1",
+    "impact": "high",
+    "example": "aaa new-model"
+  },
+  {
+    "id": "T02",
+    "category": "aaa",
+    "subcategory": "line_auth",
+    "classification_rule": "aaa.line_auth",
+    "rule_id": "risk.tech.aaa.v1",
+    "impact": "high",
+    "example": "line vty 0 4 > login local"
+  },
+  {
+    "id": "T03",
+    "category": "aaa",
+    "subcategory": "local_user",
+    "classification_rule": "aaa.local_user",
+    "rule_id": "risk.tech.aaa.v1",
+    "impact": "high",
+    "example": "username lab privilege 15"
+  },
+  {
+    "id": "T04",
+    "category": "aaa",
+    "subcategory": "radius",
+    "classification_rule": "aaa.radius",
+    "rule_id": "risk.tech.aaa.v1",
+    "impact": "high",
+    "example": "radius server LAB"
+  },
+  {
+    "id": "T05",
+    "category": "aaa",
+    "subcategory": "radius",
+    "classification_rule": "aaa.radius.context",
+    "rule_id": "risk.tech.aaa.v1",
+    "impact": "high",
+    "example": "radius server LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T06",
+    "category": "aaa",
+    "subcategory": "tacacs",
+    "classification_rule": "aaa.tacacs",
+    "rule_id": "risk.tech.aaa.v1",
+    "impact": "high",
+    "example": "tacacs server LAB"
+  },
+  {
+    "id": "T07",
+    "category": "aaa",
+    "subcategory": "tacacs",
+    "classification_rule": "aaa.tacacs.context",
+    "rule_id": "risk.tech.aaa.v1",
+    "impact": "high",
+    "example": "tacacs server LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T08",
+    "category": "access_control",
+    "subcategory": "acl",
+    "classification_rule": "access_control.acl",
+    "rule_id": "risk.tech.access_control.v1",
+    "impact": "high",
+    "example": "ip access-list extended LAB"
+  },
+  {
+    "id": "T09",
+    "category": "access_control",
+    "subcategory": "acl",
+    "classification_rule": "access_control.acl.context",
+    "rule_id": "risk.tech.access_control.v1",
+    "impact": "high",
+    "example": "access-list LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T10",
+    "category": "access_control",
+    "subcategory": "acl_binding",
+    "classification_rule": "access_control.acl_binding",
+    "rule_id": "risk.tech.access_control.v1",
+    "impact": "high",
+    "example": "ip access-group LAB in"
+  },
+  {
+    "id": "T11",
+    "category": "access_control",
+    "subcategory": "control_plane",
+    "classification_rule": "access_control.control_plane",
+    "rule_id": "risk.tech.access_control.v1",
+    "impact": "high",
+    "example": "control-plane"
+  },
+  {
+    "id": "T12",
+    "category": "access_control",
+    "subcategory": "control_plane",
+    "classification_rule": "access_control.control_plane.context",
+    "rule_id": "risk.tech.access_control.v1",
+    "impact": "high",
+    "example": "control-plane LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T13",
+    "category": "access_control",
+    "subcategory": "object_group",
+    "classification_rule": "access_control.object_group",
+    "rule_id": "risk.tech.access_control.v1",
+    "impact": "high",
+    "example": "object-group network LAB"
+  },
+  {
+    "id": "T14",
+    "category": "access_control",
+    "subcategory": "object_group",
+    "classification_rule": "access_control.object_group.context",
+    "rule_id": "risk.tech.access_control.v1",
+    "impact": "high",
+    "example": "object-group LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T15",
+    "category": "crypto_vpn",
+    "subcategory": "crypto_map",
+    "classification_rule": "crypto_vpn.crypto_map",
+    "rule_id": "risk.tech.crypto_vpn.v1",
+    "impact": "high",
+    "example": "crypto map LAB 10 ipsec-isakmp"
+  },
+  {
+    "id": "T16",
+    "category": "crypto_vpn",
+    "subcategory": "crypto_map",
+    "classification_rule": "crypto_vpn.crypto_map.context",
+    "rule_id": "risk.tech.crypto_vpn.v1",
+    "impact": "high",
+    "example": "crypto map LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T17",
+    "category": "crypto_vpn",
+    "subcategory": "generic",
+    "classification_rule": "crypto_vpn.generic",
+    "rule_id": "risk.tech.crypto_vpn.v1",
+    "impact": "high",
+    "example": "crypto dynamic-map LAB 10"
+  },
+  {
+    "id": "T18",
+    "category": "crypto_vpn",
+    "subcategory": "ike_isakmp",
+    "classification_rule": "crypto_vpn.ike_isakmp",
+    "rule_id": "risk.tech.crypto_vpn.v1",
+    "impact": "high",
+    "example": "crypto isakmp policy 10"
+  },
+  {
+    "id": "T19",
+    "category": "crypto_vpn",
+    "subcategory": "ike_isakmp",
+    "classification_rule": "crypto_vpn.ike_isakmp.context",
+    "rule_id": "risk.tech.crypto_vpn.v1",
+    "impact": "high",
+    "example": "crypto isakmp LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T20",
+    "category": "crypto_vpn",
+    "subcategory": "ipsec",
+    "classification_rule": "crypto_vpn.ipsec",
+    "rule_id": "risk.tech.crypto_vpn.v1",
+    "impact": "high",
+    "example": "crypto ipsec transform-set LAB esp-aes esp-sha-hmac"
+  },
+  {
+    "id": "T21",
+    "category": "crypto_vpn",
+    "subcategory": "ipsec",
+    "classification_rule": "crypto_vpn.ipsec.context",
+    "rule_id": "risk.tech.crypto_vpn.v1",
+    "impact": "high",
+    "example": "crypto ipsec LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T22",
+    "category": "crypto_vpn",
+    "subcategory": "tunnel",
+    "classification_rule": "crypto_vpn.tunnel",
+    "rule_id": "risk.tech.crypto_vpn.v1",
+    "impact": "high",
+    "example": "tunnel protection ipsec profile LAB"
+  },
+  {
+    "id": "T23",
+    "category": "interface",
+    "subcategory": "addressing",
+    "classification_rule": "interface.addressing",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "interface Gi1 > ip address 192.0.2.1 255.255.255.0"
+  },
+  {
+    "id": "T24",
+    "category": "interface",
+    "subcategory": "admin_state",
+    "classification_rule": "interface.admin_state",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "interface Gi1 > shutdown"
+  },
+  {
+    "id": "T25",
+    "category": "interface",
+    "subcategory": "definition",
+    "classification_rule": "interface.definition",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "interface GigabitEthernet0/1"
+  },
+  {
+    "id": "T26",
+    "category": "interface",
+    "subcategory": "description",
+    "classification_rule": "interface.description",
+    "rule_id": "risk.tech.interface_description.v1",
+    "impact": "low",
+    "example": "interface Gi1 > description lab uplink"
+  },
+  {
+    "id": "T27",
+    "category": "interface",
+    "subcategory": "generic",
+    "classification_rule": "interface.generic",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "interface Gi1 > review-unrecognized-child"
+  },
+  {
+    "id": "T28",
+    "category": "management",
+    "subcategory": "console",
+    "classification_rule": "management.console",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "line console 0"
+  },
+  {
+    "id": "T29",
+    "category": "management",
+    "subcategory": "console",
+    "classification_rule": "management.console.context",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "line console LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T30",
+    "category": "management",
+    "subcategory": "dns",
+    "classification_rule": "management.dns",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "ip domain-name lab.example"
+  },
+  {
+    "id": "T31",
+    "category": "management",
+    "subcategory": "ntp",
+    "classification_rule": "management.ntp",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "ntp server 192.0.2.1"
+  },
+  {
+    "id": "T32",
+    "category": "management",
+    "subcategory": "remote_access",
+    "classification_rule": "management.remote_access",
+    "rule_id": "risk.tech.management_access.v1",
+    "impact": "high",
+    "example": "line vty 0 4"
+  },
+  {
+    "id": "T33",
+    "category": "management",
+    "subcategory": "remote_access",
+    "classification_rule": "management.remote_access.context",
+    "rule_id": "risk.tech.management_access.v1",
+    "impact": "high",
+    "example": "line LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T34",
+    "category": "management",
+    "subcategory": "web",
+    "classification_rule": "management.web",
+    "rule_id": "risk.tech.management_access.v1",
+    "impact": "high",
+    "example": "ip http secure-server"
+  },
+  {
+    "id": "T35",
+    "category": "monitoring",
+    "subcategory": "flow",
+    "classification_rule": "monitoring.flow",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "flow exporter LAB"
+  },
+  {
+    "id": "T36",
+    "category": "monitoring",
+    "subcategory": "flow",
+    "classification_rule": "monitoring.flow.context",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "flow exporter LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T37",
+    "category": "monitoring",
+    "subcategory": "logging",
+    "classification_rule": "monitoring.logging",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "logging host 192.0.2.2"
+  },
+  {
+    "id": "T38",
+    "category": "monitoring",
+    "subcategory": "snmp",
+    "classification_rule": "monitoring.snmp",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "snmp-server location LAB"
+  },
+  {
+    "id": "T39",
+    "category": "monitoring",
+    "subcategory": "telemetry",
+    "classification_rule": "monitoring.telemetry",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "telemetry ietf subscription 1"
+  },
+  {
+    "id": "T40",
+    "category": "monitoring",
+    "subcategory": "telemetry",
+    "classification_rule": "monitoring.telemetry.context",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "telemetry LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T41",
+    "category": "other",
+    "subcategory": "unclassified",
+    "classification_rule": "fallback.unclassified",
+    "rule_id": "risk.tech.unknown_item.v1",
+    "impact": "unknown",
+    "example": "review-unknown-command"
+  },
+  {
+    "id": "T42",
+    "category": "qos",
+    "subcategory": "class_map",
+    "classification_rule": "qos.class_map",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "class-map match-any LAB"
+  },
+  {
+    "id": "T43",
+    "category": "qos",
+    "subcategory": "class_map",
+    "classification_rule": "qos.class_map.context",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "class-map LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T44",
+    "category": "qos",
+    "subcategory": "generic",
+    "classification_rule": "qos.generic",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "qos"
+  },
+  {
+    "id": "T45",
+    "category": "qos",
+    "subcategory": "policy_map",
+    "classification_rule": "qos.policy_map",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "policy-map LAB"
+  },
+  {
+    "id": "T46",
+    "category": "qos",
+    "subcategory": "policy_map",
+    "classification_rule": "qos.policy_map.context",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "policy-map LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T47",
+    "category": "qos",
+    "subcategory": "service_policy",
+    "classification_rule": "qos.service_policy",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "service-policy input LAB"
+  },
+  {
+    "id": "T48",
+    "category": "redundancy",
+    "subcategory": "glbp",
+    "classification_rule": "redundancy.glbp",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "glbp 1 ip 192.0.2.1"
+  },
+  {
+    "id": "T49",
+    "category": "redundancy",
+    "subcategory": "hsrp",
+    "classification_rule": "redundancy.hsrp",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "standby 1 ip 192.0.2.1"
+  },
+  {
+    "id": "T50",
+    "category": "redundancy",
+    "subcategory": "vrrp",
+    "classification_rule": "redundancy.vrrp",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "vrrp 1 ip 192.0.2.1"
+  },
+  {
+    "id": "T51",
+    "category": "routing",
+    "subcategory": "bgp",
+    "classification_rule": "routing.bgp",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router bgp 65000"
+  },
+  {
+    "id": "T52",
+    "category": "routing",
+    "subcategory": "bgp",
+    "classification_rule": "routing.bgp.context",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router bgp LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T53",
+    "category": "routing",
+    "subcategory": "eigrp",
+    "classification_rule": "routing.eigrp",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router eigrp 100"
+  },
+  {
+    "id": "T54",
+    "category": "routing",
+    "subcategory": "eigrp",
+    "classification_rule": "routing.eigrp.context",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router eigrp LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T55",
+    "category": "routing",
+    "subcategory": "generic",
+    "classification_rule": "routing.generic",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router lisp"
+  },
+  {
+    "id": "T56",
+    "category": "routing",
+    "subcategory": "generic",
+    "classification_rule": "routing.generic.context",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router lisp > review-unrecognized-child"
+  },
+  {
+    "id": "T57",
+    "category": "routing",
+    "subcategory": "isis",
+    "classification_rule": "routing.isis",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router isis LAB"
+  },
+  {
+    "id": "T58",
+    "category": "routing",
+    "subcategory": "isis",
+    "classification_rule": "routing.isis.context",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router isis LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T59",
+    "category": "routing",
+    "subcategory": "ospf",
+    "classification_rule": "routing.ospf",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router ospf 1"
+  },
+  {
+    "id": "T60",
+    "category": "routing",
+    "subcategory": "ospf",
+    "classification_rule": "routing.ospf.context",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router ospf LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T61",
+    "category": "routing",
+    "subcategory": "rip",
+    "classification_rule": "routing.rip",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router rip"
+  },
+  {
+    "id": "T62",
+    "category": "routing",
+    "subcategory": "rip",
+    "classification_rule": "routing.rip.context",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "router rip LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T63",
+    "category": "routing",
+    "subcategory": "route_filter",
+    "classification_rule": "routing.route_filter",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "ip prefix-list LAB permit 192.0.2.0/24"
+  },
+  {
+    "id": "T64",
+    "category": "routing",
+    "subcategory": "route_policy",
+    "classification_rule": "routing.route_policy",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "route-map LAB permit 10"
+  },
+  {
+    "id": "T65",
+    "category": "routing",
+    "subcategory": "route_policy",
+    "classification_rule": "routing.route_policy.context",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "route-map LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T66",
+    "category": "routing",
+    "subcategory": "static_route",
+    "classification_rule": "routing.static_route",
+    "rule_id": "risk.tech.routing.v1",
+    "impact": "high",
+    "example": "ip route 192.0.2.0 255.255.255.0 192.0.2.1"
+  },
+  {
+    "id": "T67",
+    "category": "services",
+    "subcategory": "dhcp",
+    "classification_rule": "services.dhcp",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "ip dhcp pool LAB"
+  },
+  {
+    "id": "T68",
+    "category": "services",
+    "subcategory": "dhcp",
+    "classification_rule": "services.dhcp.context",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "ip dhcp LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T69",
+    "category": "services",
+    "subcategory": "ip_sla",
+    "classification_rule": "services.ip_sla",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "ip sla 1"
+  },
+  {
+    "id": "T70",
+    "category": "services",
+    "subcategory": "ip_sla",
+    "classification_rule": "services.ip_sla.context",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "ip sla LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T71",
+    "category": "services",
+    "subcategory": "nat",
+    "classification_rule": "services.nat",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "ip nat inside"
+  },
+  {
+    "id": "T72",
+    "category": "services",
+    "subcategory": "tracking",
+    "classification_rule": "services.tracking",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "track 1 interface Gi1 line-protocol"
+  },
+  {
+    "id": "T73",
+    "category": "services",
+    "subcategory": "tracking",
+    "classification_rule": "services.tracking.context",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "track LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T74",
+    "category": "switching",
+    "subcategory": "etherchannel",
+    "classification_rule": "switching.etherchannel",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "channel-group 1 mode active"
+  },
+  {
+    "id": "T75",
+    "category": "switching",
+    "subcategory": "spanning_tree",
+    "classification_rule": "switching.spanning_tree",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "spanning-tree mode rapid-pvst"
+  },
+  {
+    "id": "T76",
+    "category": "switching",
+    "subcategory": "switchport",
+    "classification_rule": "switching.switchport",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "switchport mode access"
+  },
+  {
+    "id": "T77",
+    "category": "switching",
+    "subcategory": "vlan",
+    "classification_rule": "switching.vlan",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "vlan 20"
+  },
+  {
+    "id": "T78",
+    "category": "switching",
+    "subcategory": "vlan",
+    "classification_rule": "switching.vlan.context",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "vlan LAB > review-unrecognized-child"
+  },
+  {
+    "id": "T79",
+    "category": "switching",
+    "subcategory": "vtp",
+    "classification_rule": "switching.vtp",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "vtp mode transparent"
+  },
+  {
+    "id": "T80",
+    "category": "system",
+    "subcategory": "boot",
+    "classification_rule": "system.boot",
+    "rule_id": "risk.tech.system_control.v1",
+    "impact": "high",
+    "example": "boot system flash:cat9k.bin"
+  },
+  {
+    "id": "T81",
+    "category": "system",
+    "subcategory": "crypto_key",
+    "classification_rule": "system.crypto_key",
+    "rule_id": "risk.tech.system_control.v1",
+    "impact": "high",
+    "example": "crypto key generate rsa modulus 2048"
+  },
+  {
+    "id": "T82",
+    "category": "system",
+    "subcategory": "global_service",
+    "classification_rule": "system.global_service",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "service password-encryption"
+  },
+  {
+    "id": "T83",
+    "category": "system",
+    "subcategory": "identity",
+    "classification_rule": "system.hostname",
+    "rule_id": "risk.tech.known_category.v1",
+    "impact": "medium",
+    "example": "hostname aegis-lab"
+  }
+]
