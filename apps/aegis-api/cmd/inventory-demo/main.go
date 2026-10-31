@@ -1,4 +1,4 @@
-// inventory-demo is a development-only, loopback Inventory API.
+// inventory-demo is a development-only, loopback Inventory and backup-read API.
 // It deliberately does not load production config or import any SSH connector.
 package main
 
@@ -86,7 +86,8 @@ func run() error {
 	// Retain this disposable directory on shutdown for local inspection; never clean/restore it.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	store, err := sqlite.Open(ctx, filepath.Join(runDir, "inventory-demo.sqlite"))
+	databasePath := filepath.Join(runDir, "inventory-demo.sqlite")
+	store, err := sqlite.Open(ctx, databasePath)
 	if err != nil {
 		return err
 	}
@@ -101,6 +102,9 @@ func run() error {
 		return err
 	}
 	if err := store.AssignRole(ctx, userID, "viewer"); err != nil {
+		return err
+	}
+	if err := grantDemoBackupRead(ctx, databasePath, store, userID); err != nil {
 		return err
 	}
 	key := make([]byte, 32)
@@ -131,6 +135,13 @@ func run() error {
 		{"access-sw-01", "ACCESS-SW-01", "203.0.113.30", "cedar-branch"},
 	}
 	ranges := []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24"), netip.MustParsePrefix("198.51.100.0/24"), netip.MustParsePrefix("203.0.113.0/24")}
+	backupRoot := filepath.Join(runDir, "synthetic-snapshots")
+	// ConfigService stays nil: only List and Content are reachable over HTTP.
+	backupService, err := services.NewBackupService(store, nil, backupRoot, 64<<10)
+	if err != nil {
+		return err
+	}
+	totalBackups := 0
 	for _, seed := range seeds {
 		addr, err := netip.ParseAddr(seed.ip)
 		if err != nil {
@@ -146,24 +157,33 @@ func run() error {
 		if err := store.CreateDevice(ctx, domain.Device{ID: seed.id, DisplayName: seed.name, Hostname: seed.name, ManagementIP: seed.ip, ManagementPort: 22, Vendor: "mock", Platform: "synthetic", Protocol: "mock", CredentialID: placeholderID, DeviceGroup: seed.group, Description: "SYNTHETIC DEMO — never a live device", Enabled: false, CreatedAt: now, UpdatedAt: now}); err != nil {
 			return err
 		}
+		count, err := seedDemoSnapshots(ctx, store, backupService, backupRoot, seed.id, seed.name, now)
+		if err != nil {
+			return err
+		}
+		totalBackups += count
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
-	handler := &api.Handler{Auth: authService, Devices: services.NewDeviceService(store, nil, registry), Audits: store, Health: store, Logger: logger}
+	handler := &api.Handler{Auth: authService, Devices: services.NewDeviceService(store, nil, registry), Backups: backupService, Audits: store, Health: store, Logger: logger}
 	router := api.Routes(handler, &observability.Metrics{}, api.RouterConfig{RequestTimeout: 10 * time.Second})
 	leaf := regexp.MustCompile("^/api/v1/devices/[a-zA-Z0-9-]+$")
+	backupRead := regexp.MustCompile("^/api/v1/devices/[a-zA-Z0-9-]+/backups(?:/[a-zA-Z0-9-]+)?$")
 	restricted := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Aegis-Data-Source", "aegis-go-isolated-demo")
 		w.Header().Set("X-Aegis-Demo-Mode", "mock-inventory-v1")
+		if backupRead.MatchString(r.URL.Path) {
+			w.Header().Set("X-Aegis-Data-Source", "aegis-go-disposable-sqlite-demo")
+		}
 		w.Header().Set("Cache-Control", "no-store")
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil || (host != "127.0.0.1" && host != "localhost") {
 			http.Error(w, "Loopback demo only", http.StatusForbidden)
 			return
 		}
-		allowedGet := r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/api/v1/auth/me" || r.URL.Path == "/api/v1/devices" || leaf.MatchString(r.URL.Path)
+		allowedGet := r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/api/v1/auth/me" || r.URL.Path == "/api/v1/devices" || leaf.MatchString(r.URL.Path) || backupRead.MatchString(r.URL.Path)
 		allowedLogin := r.Method == http.MethodPost && r.URL.Path == "/api/v1/auth/login"
 		if !(r.Method == http.MethodGet && allowedGet) && !allowedLogin {
-			http.Error(w, "This demo exposes Inventory reads only", http.StatusNotFound)
+			http.Error(w, "This demo exposes Inventory and backup List/Content reads only", http.StatusNotFound)
 			return
 		}
 		router.ServeHTTP(w, r)
@@ -174,7 +194,7 @@ func run() error {
 	}
 	defer listener.Close()
 	server := &http.Server{Handler: restricted, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 12 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 32 << 10}
-	result := map[string]any{"url": "http://" + listener.Addr().String(), "pid": os.Getpid(), "run_directory": runDir, "source": demoSource, "connector": "mock", "devices": len(seeds)}
+	result := map[string]any{"url": "http://" + listener.Addr().String(), "pid": os.Getpid(), "run_directory": runDir, "source": demoSource, "connector": "mock", "devices": len(seeds), "backups": totalBackups}
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		return err
 	}

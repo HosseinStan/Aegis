@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {isIP} from 'node:net';
 
 export const GO_SOURCE='Aegis Go API — Isolated Demo';
+export const GO_BACKUP_SOURCE='Aegis Go API — Disposable SQLite Demo';
 const prefix='/api/go/v1/devices';
 const isDemoIP=ip=>isIP(ip)===4&&/^(192\.0\.2|198\.51\.100|203\.0\.113)\./.test(ip);
 
@@ -19,6 +20,20 @@ function present(record){
   site:record.device_group,role:'Synthetic inventory record',model:'Not supplied by Inventory API',
   version:'Not supplied by Inventory API',serial:'Not supplied by Inventory API',
   status:'Demo · disabled',risk:'unknown',last_seen:'No live connection',source:'AEGIS_GO_ISOLATED_DEMO'};
+}
+
+function presentBackup(record,deviceID,config){
+ if(!record||record.device_id!==deviceID||record.config_type!=='running'||record.trigger_type!=='demo_seed'||
+    !['id','created_at','retrieved_at','content_hash'].every(key=>typeof record[key]==='string'&&record[key])||
+    !/^[a-f0-9]{64}$/.test(record.content_hash)||!Number.isSafeInteger(record.size_bytes)||record.size_bytes<0||
+    !Number.isFinite(Date.parse(record.created_at))||!Number.isFinite(Date.parse(record.retrieved_at))||
+    (config!==undefined&&(typeof config!=='string'||!config.startsWith('! AEGIS SYNTHETIC DEMO — DISPOSABLE BACKUP SNAPSHOT\n')))){
+  throw new Error('Unexpected synthetic Go backup response');
+ }
+ return {id:record.id,device_id:record.device_id,config_type:record.config_type,
+  created_at:record.created_at,retrieved_at:record.retrieved_at,content_hash:record.content_hash,size_bytes:record.size_bytes,
+  trigger_type:record.trigger_type,label:'Go snapshot '+record.id.slice(0,8),origin:'Go '+record.trigger_type+' · read-only',
+  source:'AEGIS_GO_BACKUP_DEMO',synthetic:true,...(config===undefined?{}:{config})};
 }
 
 export function createGoInventoryBridge(){
@@ -62,30 +77,35 @@ export function createGoInventoryBridge(){
  async function probe(){
   const {response,payload}=await authenticated('/api/v1/auth/me');
   const permissions=payload.data?.permissions||[];
-  if(!response.ok||!permissions.includes('devices.read')||permissions.includes('devices.manage')||
+  if(!response.ok||!permissions.includes('devices.read')||!permissions.includes('backups.read')||
+     permissions.includes('backups.create')||permissions.includes('devices.manage')||
      permissions.includes('credentials.manage')||permissions.includes('system.manage'))throw new Error('Unexpected demo viewer grants');
-  return {authentication:'verified',identity:'ephemeral viewer',devicesRead:true,deviceWrites:false};
+  return {authentication:'verified',identity:'ephemeral viewer + demo backup reader',devicesRead:true,backupsRead:true,deviceWrites:false,backupWrites:false};
  }
  async function handle(req,res,pathname){
-  let meta={source:GO_SOURCE,mode:'DEMO',synthetic:true,request_id:randomUUID(),storage:'disposable SQLite'};
+  const match=new RegExp('^'+prefix+'(?:/([a-zA-Z0-9-]+)(?:/(backups)(?:/([a-zA-Z0-9-]+))?)?)?$').exec(pathname);
+  const backups=Boolean(match?.[2]),id=match?.[1]||null,backupID=match?.[3]||null;
+  let meta={source:backups?GO_BACKUP_SOURCE:GO_SOURCE,mode:'DEMO',synthetic:true,request_id:randomUUID(),storage:backups?'disposable SQLite metadata + synthetic snapshot files':'disposable SQLite'};
   const json=(status,body)=>{
-   res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','X-Aegis-Data-Source':'aegis-go-isolated-demo',
+   res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','X-Aegis-Data-Source':backups?'aegis-go-disposable-sqlite-demo':'aegis-go-isolated-demo',
     'X-Request-ID':meta.request_id,...(status===405?{Allow:'GET'}:{})});
    res.end(JSON.stringify({...body,meta}));
   };
-  if(req.method!=='GET')return json(405,{error:{code:'READ_ONLY_DEMO',message:'This adapter supports Inventory GET requests only.'}});
-  if(!new RegExp('^'+prefix+'(?:/[a-zA-Z0-9-]+)?$').test(pathname))return json(404,{error:{code:'ENDPOINT_NOT_FOUND',message:'Only Inventory listing and device profiles are connected to Go.'}});
+  if(req.method!=='GET')return json(405,{error:{code:'READ_ONLY_DEMO',message:'This adapter supports Inventory and backup List/Content GET requests only.'}});
+  if(!match)return json(404,{error:{code:'ENDPOINT_NOT_FOUND',message:'Only Inventory and backup List/Content reads are connected to Go.'}});
   if(!target)return json(503,{error:{code:'GO_API_UNAVAILABLE',message:'The isolated Go API is unavailable. Start it, then Retry. No Node fixture fallback is used.'}});
-  const id=pathname===prefix?null:pathname.slice(prefix.length+1);
-  const path='/api/v1/devices'+(id?'/'+id:'?limit=100');
+  const path='/api/v1/devices'+(id?'/'+id:'')+(backups?'/backups'+(backupID?'/'+backupID:'?limit=100'):id?'':'?limit=100');
   try{
    const {response,payload}=await authenticated(path);
    const requestID=payload.meta?.request_id||payload.error?.request_id;
    if(typeof requestID!=='string'||requestID!==response.headers.get('x-request-id'))throw new Error('Missing Go request identity');
-   meta={...meta,request_id:requestID,upstream_path:path};
+   meta={...meta,request_id:requestID,upstream_path:path,...(payload.meta?.pagination?{pagination:payload.meta.pagination}:{})};
    if(!response.ok)return json(response.status,{error:{code:payload.error?.code||'GO_API_ERROR',message:payload.error?.message||'The Go API could not complete this request.'}});
-   const records=id?present(payload.data):Array.isArray(payload.data)?payload.data.map(present):null;
-   if(records===null||id&&records.id!==id)throw new Error('Unexpected Go Inventory response');
+   const records=backups?(backupID?presentBackup(payload.data?.backup,id,payload.data?.config):
+    Array.isArray(payload.data)?payload.data.map(record=>presentBackup(record,id)):null):
+    id?present(payload.data):Array.isArray(payload.data)?payload.data.map(present):null;
+   if(records===null||backupID&&records.id!==backupID||!backups&&id&&records.id!==id)throw new Error('Unexpected Go response');
+   if(backupID&&typeof records.config!=='string')throw new Error('Missing Go snapshot content');
    return json(200,{data:records});
   }catch{
    return json(503,{error:{code:'GO_API_UNAVAILABLE',message:'The isolated Go API could not be reached or verified. Start it, then Retry. No Node fixture fallback is used.'}});

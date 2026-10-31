@@ -32,7 +32,7 @@ async function startAPI(){
  proc.stdin.on('error',()=>{}); // A startup failure must not expose private bootstrap bytes.
  proc.stderr.on('data',()=>{}); // Never echo arbitrary child output; report lifecycle failures below.
  proc.on('exit',()=>{
-  if(child===proc){child=null;goInfo=null;bridge.disconnect();if(!closing)console.log('Go API stopped. Inventory will show unavailable. Use start-api, then Retry.');}
+  if(child===proc){child=null;goInfo=null;bridge.disconnect();if(!closing)console.log('Go API stopped. Inventory and backup history will show unavailable. Use start-api, then Retry.');}
  });
  try{
   const info=await new Promise((resolve,reject)=>{
@@ -55,7 +55,7 @@ async function startAPI(){
   bridge.connect(info.url,credentials);
   const auth=await bridge.probe();
   goInfo=info;
-  console.log(JSON.stringify({goApi:info.url,pid:info.pid,storage:'fresh disposable SQLite',connector:'mock',devices:info.devices,...auth}));
+  console.log(JSON.stringify({goApi:info.url,pid:info.pid,storage:'fresh disposable SQLite + synthetic snapshot files',connector:'mock',devices:info.devices,backups:info.backups,...auth}));
  }catch(error){
   bridge.disconnect();if(child===proc)proc.kill();
   throw error;

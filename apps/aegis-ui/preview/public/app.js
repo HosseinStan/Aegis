@@ -36,6 +36,7 @@ const main=document.querySelector('#main');
 
 // HTTP views never fall back to fixture records. Dashboard/risk remain fixture demos.
 const GO_SOURCE='Aegis Go API — Isolated Demo';
+const GO_BACKUP_SOURCE='Aegis Go API — Disposable SQLite Demo';
 const inventoryHTTP={status:'idle',records:[],path:'/api/go/v1/devices',httpStatus:null,meta:null,elapsed:0,error:null,sequence:0};
 const deviceHTTP={status:'idle',id:null,record:null,path:null,httpStatus:null,meta:null,elapsed:0,error:null,sequence:0};
 function isInventoryRecord(record){
@@ -89,7 +90,7 @@ async function loadDevice(id){
 }
 function apiSource(info){
  const ready=info.status==='ready',loading=info.status==='loading';
- const source=info.path?.startsWith('/api/go/')?GO_SOURCE:'Local Mock API';
+ const source=info.source||(info.path?.startsWith('/api/go/')?(info.path.includes('/backups')?GO_BACKUP_SOURCE:GO_SOURCE):'Local Mock API');
  const status=loading?'Request in progress':info.httpStatus?'HTTP '+info.httpStatus:'Connection unavailable';
  return'<div class="api-source '+(ready?'api-ready':loading?'api-pending':'api-failed')+'" data-api-path="'+esc(info.path)+'" data-http-status="'+(info.httpStatus||'')+'"><div class="api-source-label">'+icon('server')+'<strong>'+esc(source)+'</strong><span class="api-status">'+esc(status)+'</span></div><div class="api-source-detail"><a href="'+esc(info.path)+'" target="_blank" rel="noopener">GET '+esc(info.path)+'</a>'+(ready?'<span>'+info.elapsed+' ms · synthetic response</span>':'')+(info.meta?.upstream_path?'<span>Go GET '+esc(info.meta.upstream_path)+' · disposable SQLite · ephemeral viewer</span>':'')+'</div>'+(info.meta?.request_id?'<details class="api-request-id"><summary>HTTP request details</summary><span>Response request ID: <code>'+esc(info.meta.request_id)+'</code></span></details>':'')+'</div>';
 }
@@ -115,89 +116,108 @@ function inventoryDevicePage(route){
 // Session-only snapshots are deliberately separate from immutable HTTP history.
 const memorySnapshots=new Map();
 const localSnapshots=id=>memorySnapshots.get(id)||[];
-const historyHTTP={status:'idle',scope:null,records:[],requests:[],sequence:0};
+const historyHTTP={status:'idle',scope:null,devices:[],records:[],requests:[],sequence:0};
 const comparisonHTTP={status:'idle',records:[],requests:[],left:null,right:null,sequence:0};
 let snapshotSequence=0;
-const backupPath=id=>'/api/mock/v1/devices/'+encodeURIComponent(id)+'/backups';
-function isBackup(record,id,withConfig=false){
+const fixtureBackupPath=id=>'/api/mock/v1/devices/'+encodeURIComponent(id)+'/backups';
+function isFixtureBackup(record,id,withConfig=false){
  return record&&record.device_id===id&&record.source==='SYNTHETIC_DEMO'&&record.synthetic===true&&
   ['id','label','created_at','config_type','origin'].every(key=>typeof record[key]==='string'&&record[key].length>0)&&
   Number.isFinite(Date.parse(record.created_at))&&(!withConfig||
    (typeof record.config==='string'&&record.config.startsWith('! AEGIS SYNTHETIC DEMO — NOT A DEVICE CONFIGURATION\n')));
 }
-async function backupRequest(path){
+async function backupRequest(path,expectedSource='Local Mock API'){
  try{
-  const result=await requestMockAPI(path);
-  return {...result,info:{status:'ready',path,httpStatus:result.httpStatus,meta:result.payload.meta,elapsed:result.elapsed}};
+  const result=await requestMockAPI(path,expectedSource);
+  return {...result,info:{status:'ready',source:expectedSource,path,httpStatus:result.httpStatus,meta:result.payload.meta,elapsed:result.elapsed}};
  }catch(error){error.path=path;throw error;}
 }
-async function readHistory(id){
- const result=await backupRequest(backupPath(id)),records=result.payload.data;
- if(!Array.isArray(records)||!records.every(b=>isBackup(b,id))||new Set(records.map(b=>b.id)).size!==records.length){
-  throw Object.assign(new Error('The mock API returned an invalid synthetic backup history.'),{path:backupPath(id)});
+async function readFixtureHistory(id){
+ const result=await backupRequest(fixtureBackupPath(id)),records=result.payload.data;
+ if(!Array.isArray(records)||!records.every(b=>isFixtureBackup(b,id))||new Set(records.map(b=>b.id)).size!==records.length){
+  throw Object.assign(new Error('The mock API returned an invalid synthetic backup history.'),{path:fixtureBackupPath(id)});
  }
  return {records,info:result.info};
 }
-async function readSnapshot(id,backupId){
- const path=backupPath(id)+'/'+encodeURIComponent(backupId),result=await backupRequest(path);
- if(!isBackup(result.payload.data,id,true)||result.payload.data.id!==backupId){
+async function readFixtureSnapshot(id,backupId){
+ const path=fixtureBackupPath(id)+'/'+encodeURIComponent(backupId),result=await backupRequest(path);
+ if(!isFixtureBackup(result.payload.data,id,true)||result.payload.data.id!==backupId){
   throw Object.assign(new Error('The mock API returned an unexpected synthetic snapshot.'),{path});
  }
  return {record:result.payload.data,info:result.info};
 }
-function backupFailure(error,fallbackPath){
- return {status:error.httpStatus===404?'not-found':'error',path:error.path||fallbackPath,
+function backupFailure(error,fallbackPath,source='Local Mock API'){
+ return {status:error.httpStatus===404?'not-found':'error',source,path:error.path||fallbackPath,
   httpStatus:error.httpStatus||null,meta:error.meta||null,elapsed:0,
-  error:(error.httpStatus||error.path&&error.message.startsWith('The mock API returned'))?error.message:
-   'Could not load synthetic backups from the Local Mock API. Check the local preview server, then Retry.'};
+  error:(error.httpStatus||error.path&&(error.message.startsWith('The mock API returned')||error.message.startsWith('The Go API returned')))?error.message:
+   'Could not load synthetic backups from '+source+'. Check the local server, then Retry.'};
 }
-function httpEvidence(requests){
+function httpEvidence(requests,source='Local Mock API'){
  return '<div class="api-source api-ready"><div class="api-source-label">'+icon('server')+
-  '<strong>Local Mock API</strong><span class="api-status">HTTP 200 · '+requests.length+' GET response'+(requests.length===1?'':'s')+
+  '<strong>'+esc(source)+'</strong><span class="api-status">HTTP 200 · '+requests.length+' GET response'+(requests.length===1?'':'s')+
   '</span></div><details class="api-request-id"><summary>HTTP sources &amp; response request IDs</summary>'+
   requests.map(info=>'<div class="api-source-detail"><a href="'+esc(info.path)+'" target="_blank" rel="noopener">GET '+esc(info.path)+
    '</a><span>'+info.elapsed+' ms · <code>'+esc(info.meta.request_id)+'</code></span></div>').join('')+'</details></div>';
 }
 async function loadBackupHistory(scope='all'){
  const sequence=++historyHTTP.sequence;
- Object.assign(historyHTTP,{status:'loading',scope,records:[],requests:[],path:backupPath(scope==='all'?devices[0].id:scope),httpStatus:null,meta:null});render();
+ Object.assign(historyHTTP,{status:'loading',scope,source:GO_BACKUP_SOURCE,devices:[],records:[],requests:[],path:goBackupPath(scope==='all'?'core-sw-01':scope),httpStatus:null,meta:null});render();
  try{
-  const ids=scope==='all'?devices.map(d=>d.id):[scope];
+  const inventory=await backupRequest('/api/go/v1/devices',GO_SOURCE);
+  const goDevices=inventory.payload.data;
+  if(!Array.isArray(goDevices)||!goDevices.every(isInventoryRecord)||new Set(goDevices.map(d=>d.id)).size!==goDevices.length)throw new Error('The Go API returned invalid inventory metadata.');
+  const ids=scope==='all'?goDevices.map(d=>d.id):[scope];
   const results=await Promise.all(ids.map(async id=>{
-   const result=await readHistory(id);
-   return {...result,records:result.records.map(b=>({...b,device:devices.find(d=>d.id===id)||{id,display_name:id}}))};
+   const result=await readGoHistory(id);
+   const device=goDevices.find(d=>d.id===id);
+   if(!device)throw new Error('Backup device is not in the isolated Go inventory.');
+   return {...result,records:result.records.map(b=>({...b,device}))};
   }));
   if(sequence!==historyHTTP.sequence)return;
-  Object.assign(historyHTTP,{status:'ready',records:results.flatMap(x=>x.records).sort((a,b)=>b.created_at.localeCompare(a.created_at)),requests:results.map(x=>x.info)});
+  Object.assign(historyHTTP,{status:'ready',devices:goDevices,records:results.flatMap(x=>x.records).sort((a,b)=>b.created_at.localeCompare(a.created_at)),requests:[inventory.info,...results.map(x=>x.info)]});
  }catch(error){
   if(sequence!==historyHTTP.sequence)return;
-  Object.assign(historyHTTP,backupFailure(error,historyHTTP.path),{records:[],requests:[]});
+  Object.assign(historyHTTP,backupFailure(error,historyHTTP.path,GO_BACKUP_SOURCE),{devices:[],records:[],requests:[]});
  }
  render();
 }
 function sessionHistory(scope){
- return devices.filter(d=>scope==='all'||d.id===scope).flatMap(d=>localSnapshots(d.id).map(b=>({...b,device:d})));
+ return historyHTTP.devices.filter(d=>scope==='all'||d.id===scope).flatMap(d=>localSnapshots(d.id).map(b=>({...b,device:d})));
 }
 function backupHistoryBody(scope){
- if(historyHTTP.scope!==scope||historyHTTP.status==='loading'||historyHTTP.status==='idle'){
-  return apiState({...historyHTTP,status:'loading'},'Loading backup history…','Fetching synthetic snapshot metadata over HTTP.','retry-backups');
- }
- if(historyHTTP.status!=='ready')return apiState(historyHTTP,historyHTTP.status==='not-found'?'Backup history not found':'Backup API unavailable',historyHTTP.error,'retry-backups');
+ if(historyHTTP.scope!==scope||historyHTTP.status==='loading'||historyHTTP.status==='idle')return apiState({...historyHTTP,status:'loading'},'Loading Go backup history…','Fetching metadata from the native BackupService and disposable SQLite.','retry-backups');
+ if(historyHTTP.status!=='ready')return apiState(historyHTTP,historyHTTP.status==='not-found'?'Go backup history not found':'Go backup API unavailable',historyHTTP.error,'retry-backups');
  const local=sessionHistory(scope);
- return httpEvidence(historyHTTP.requests)+'<section class="card">'+
-  cardHead('HTTP backup history',historyHTTP.records.length+' synthetic snapshots · server fixture is read-only',demoTag())+
-  (historyHTTP.records.length?backupTable(historyHTTP.records):'<div class="empty-state"><h2>No HTTP snapshots</h2><p>The API returned an empty backup history for this device.</p>'+btn('Retry','retry-backups')+'</div>')+'</section>'+
-  '<section class="card session-snapshots">'+cardHead('Browser-memory snapshots',local.length+' local copies · never sent to or persisted by the API','<span class="tiny-tag">THIS TAB ONLY</span>')+
-  (local.length?backupTable(local):'<p class="session-note">Create demo backup makes a synthetic copy in this tab only. Reloading removes it. The HTTP backup history stays unchanged.</p>')+'</section>';
+ return httpEvidence(historyHTTP.requests,GO_BACKUP_SOURCE)+'<section class="card">'+cardHead('Go backup history',historyHTTP.records.length+' seeded synthetic snapshots · native BackupService reads',demoTag())+
+  (historyHTTP.records.length?backupTable(historyHTTP.records):'<div class="empty-state"><h2>No Go backups</h2><p>The Go API returned an empty history for this scope.</p>'+btn('Retry','retry-backups')+'</div>')+'</section>'+
+  '<section class="card session-snapshots">'+cardHead('Browser-memory fixture copies',local.length+' local copies · never persisted to Go or Node','<span class="tiny-tag">THIS TAB ONLY</span>')+
+  (local.length?backupTable(local):'<p class="session-note">Create demo backup copies a legacy synthetic fixture into this tab only. Reloading removes it. Go history stays unchanged.</p>')+'</section>';
+}
+const goBackupPath=id=>'/api/go/v1/devices/'+encodeURIComponent(id)+'/backups';
+function isGoBackup(record,id,withConfig=false){
+ return record&&record.device_id===id&&record.source==='AEGIS_GO_BACKUP_DEMO'&&record.synthetic===true&&
+  ['id','label','created_at','config_type','origin'].every(k=>typeof record[k]==='string'&&record[k])&&
+  /^[a-f0-9]{64}$/.test(record.content_hash)&&Number.isSafeInteger(record.size_bytes)&&record.size_bytes>=0&&
+  Number.isFinite(Date.parse(record.created_at))&&(!withConfig||typeof record.config==='string'&&record.config.startsWith('! AEGIS SYNTHETIC DEMO — DISPOSABLE BACKUP SNAPSHOT\n'));
+}
+async function readGoHistory(id){
+ const result=await backupRequest(goBackupPath(id),GO_BACKUP_SOURCE),records=result.payload.data;
+ if(!Array.isArray(records)||!records.every(b=>isGoBackup(b,id))||new Set(records.map(b=>b.id)).size!==records.length)throw Object.assign(new Error('The Go API returned invalid backup metadata.'),{path:goBackupPath(id)});
+ return {records,info:result.info};
+}
+async function readGoSnapshot(id,backupId){
+ const path=goBackupPath(id)+'/'+encodeURIComponent(backupId),result=await backupRequest(path,GO_BACKUP_SOURCE);
+ if(!isGoBackup(result.payload.data,id,true)||result.payload.data.id!==backupId)throw Object.assign(new Error('The Go API returned an unexpected snapshot.'),{path});
+ return {record:result.payload.data,info:result.info};
 }
 function comparisonHeading(route){
- return header('Configuration comparison','See what changed. Understand what matters.','Synthetic snapshots fetched over HTTP; differences calculated in this browser.',btn('Review demo impact','risk','primary','data-device-id="'+route.device.id+'"','shield'));
+ return header('Configuration comparison','See what changed. Understand what matters.','FIXTURE BASED · Node sample snapshots, separate from Go backup history. Differences calculated in this browser.',btn('Review demo impact','risk','primary','data-device-id="'+route.device.id+'"','shield'));
 }
 async function loadComparison(route=routing()){
  const sequence=++comparisonHTTP.sequence,id=route.query.get('device')||route.device.id;
- Object.assign(comparisonHTTP,{status:'loading',records:[],requests:[],left:null,right:null,path:backupPath(id),httpStatus:null,meta:null});render();
+ Object.assign(comparisonHTTP,{status:'loading',records:[],requests:[],left:null,right:null,path:fixtureBackupPath(id),httpStatus:null,meta:null});render();
  try{
-  const history=await readHistory(id);
+  const history=await readFixtureHistory(id);
   if(sequence!==comparisonHTTP.sequence)return;
   const records=[...localSnapshots(id),...history.records];
   Object.assign(comparisonHTTP,{records,requests:[history.info]});
@@ -206,7 +226,7 @@ async function loadComparison(route=routing()){
   const rightId=route.query.get('right')||records[0].id;
   const selected=await Promise.all([leftId,rightId].map(async backupId=>{
    const local=localSnapshots(id).find(b=>b.id===backupId);
-   return local?{record:local,info:null}:readSnapshot(id,backupId);
+   return local?{record:local,info:null}:readFixtureSnapshot(id,backupId);
   }));
   if(sequence!==comparisonHTTP.sequence)return;
   Object.assign(comparisonHTTP,{status:'ready',left:selected[0].record,right:selected[1].record,
@@ -220,16 +240,16 @@ async function loadComparison(route=routing()){
 async function showSnapshot(id,backupId){
  const sequence=++snapshotSequence;
  const local=localSnapshots(id).find(b=>b.id===backupId);
- modal('Synthetic snapshot',local?'<p>Browser-memory copy · not persisted by the API.</p><pre class="config-view">'+esc(local.config)+'</pre>':
-  apiState({status:'loading',path:backupPath(id)+'/'+encodeURIComponent(backupId)},'Loading snapshot…','Fetching synthetic configuration text over HTTP.','retry-snapshot'));
+ modal('Synthetic snapshot',local?'<p>Browser-memory fixture copy · never persisted to Go or Node.</p><pre class="config-view">'+esc(local.config)+'</pre>':
+  apiState({status:'loading',source:GO_BACKUP_SOURCE,path:goBackupPath(id)+'/'+encodeURIComponent(backupId)},'Loading snapshot…','Fetching synthetic configuration text over HTTP.','retry-snapshot'));
  if(local)return;
  try{
-  const result=await readSnapshot(id,backupId);
+  const result=await readGoSnapshot(id,backupId);
   if(sequence!==snapshotSequence)return;
-  modal(result.record.label+' · HTTP snapshot',apiSource(result.info)+'<p>DEMO / UNVERIFIED · Entirely synthetic configuration. Read-only HTTP response.</p><pre class="config-view">'+esc(result.record.config)+'</pre>');
+  modal(result.record.label,apiSource(result.info)+'<p>DEMO / UNVERIFIED · Seeded synthetic text read by native BackupService.Content with its SHA-256 verification.</p><details class="api-request-id"><summary>Native snapshot metadata</summary><p>ID: <code>'+esc(result.record.id)+'</code></p><p>SHA-256: <code>'+esc(result.record.content_hash)+'</code></p><p>'+result.record.size_bytes+' bytes · '+esc(result.record.trigger_type)+'</p></details><pre class="config-view">'+esc(result.record.config)+'</pre>');
  }catch(error){
   if(sequence!==snapshotSequence)return;
-  const info=backupFailure(error,backupPath(id)+'/'+encodeURIComponent(backupId));
+  const info=backupFailure(error,goBackupPath(id)+'/'+encodeURIComponent(backupId),GO_BACKUP_SOURCE);
   modal('Synthetic snapshot unavailable',apiState(info,info.status==='not-found'?'Snapshot not found':'Snapshot API unavailable',info.error,'retry-snapshot'));
   const retry=document.querySelector('[data-action="retry-snapshot"]');
   if(retry){retry.dataset.deviceId=id;retry.dataset.backupId=backupId;}
@@ -276,7 +296,7 @@ function go(view,params={}){
 }
 function compareTo(d,rightId,leftId){
  // Explicit row selections travel as IDs; contents are loaded by loadComparison().
- const records=[...localSnapshots(d.id),...(historyHTTP.status==='ready'?historyHTTP.records.filter(b=>b.device_id===d.id):[])];
+ const records=[...localSnapshots(d.id),...d.backups];
  const right=records.find(b=>b.id===rightId);
  const index=records.indexOf(right);
  const left=records.find(b=>b.id===leftId)||(right?records[index+1]||records.at(-1):null);
@@ -324,7 +344,7 @@ function overview(){
  const recent=devices.filter(d=>d.risk!=='low');
  const table='<table aria-label="Recent demo changes"><thead><tr><th>Device</th><th>Configuration change</th><th>Potential impact</th><th>Snapshot</th><th></th></tr></thead><tbody>'+recent.map(d=>'<tr tabindex="0" data-compare="'+d.id+'"><td>'+deviceLabel(d)+'</td><td>'+esc(d.change_summary)+'</td><td>'+badge(d.risk)+'</td><td>'+time(d.backups[0].created_at)+'</td><td class="arrow-cell">'+icon('chevron')+'</td></tr>').join('')+'</tbody></table>';
  const priority=pending.slice(0,3).map(d=>'<button class="priority-item" data-route="/risk?device='+d.id+'"><span class="priority-symbol">'+icon(d.risk==='unknown'?'help':'shield')+'</span><span><strong>'+esc(d.findings[0].title)+'</strong><p>'+esc(d.display_name)+' · '+esc(d.site)+'</p>'+badge(d.risk)+'</span>'+icon('chevron')+'</button>').join('');
- return header('A little clarity. A lot of confidence.','Your network. In focus.','Explore your devices, understand changes, and make room for better decisions.','<span class="muted small">Sample · 28 Oct 2026</span>'+btn('View inventory','inventory','primary','','arrow'))+stats()+'<section class="dashboard-grid">'+chart()+topology()+'</section><section class="dashboard-grid"><article class="card table-card">'+cardHead('Recent configuration changes','A synthetic change queue, ready to explore.',demoTag())+'<div class="table-scroll">'+table+'</div></article><article class="card">'+cardHead('Needs a closer look',pending.length+' demo devices in the review queue','<a href="#/risk" class="text-link">View all '+icon('arrow')+'</a>')+'<div class="priority-list">'+(priority||'<div class="empty-state">All demo findings reviewed.</div>')+'</div><div class="priority-card-footer">'+icon('help')+'Sample findings, not a real security assessment.</div></article></section><div class="card activity-strip"><span>'+icon('archive')+'Latest demo snapshot · '+esc(devices[0].display_name)+'</span><span>'+icon('lock')+'Live device connections disabled</span><button class="text-link" data-action="activity">View demo activity '+icon('arrow')+'</button></div>';
+ return header('A little clarity. A lot of confidence.','Your network. In focus.','Explore your devices, understand changes, and make room for better decisions.','<span class="muted small">Sample · 28 Oct 2026</span>'+btn('View inventory','inventory','primary','','arrow'))+'<div class="demo-callout">'+icon('help')+'FIXTURE BASED · This dashboard shows the legacy 12-device sample. Go Inventory and backup history use four separate synthetic records.</div>'+stats()+'<section class="dashboard-grid">'+chart()+topology()+'</section><section class="dashboard-grid"><article class="card table-card">'+cardHead('Recent configuration changes','A synthetic change queue, ready to explore.',demoTag())+'<div class="table-scroll">'+table+'</div></article><article class="card">'+cardHead('Needs a closer look',pending.length+' demo devices in the review queue','<a href="#/risk" class="text-link">View all '+icon('arrow')+'</a>')+'<div class="priority-list">'+(priority||'<div class="empty-state">All demo findings reviewed.</div>')+'</div><div class="priority-card-footer">'+icon('help')+'Sample findings, not a real security assessment.</div></article></section><div class="card activity-strip"><span>'+icon('archive')+'Latest demo snapshot · '+esc(devices[0].display_name)+'</span><span>'+icon('lock')+'Live device connections disabled</span><button class="text-link" data-action="activity">View demo activity '+icon('arrow')+'</button></div>';
 }
 function inventory(){
  const heading=header('Device inventory','A home for every device.','Synthetic records from the real Go API and disposable SQLite. Live access disabled; risk is not assessed.',btn('Refresh inventory','retry-inventory','primary','','activity')+btn('Export demo JSON','export','default',inventoryHTTP.status==='ready'?'':'disabled','download'));
@@ -338,16 +358,19 @@ function inventory(){
  '<div class="filterbar"><label class="search-field">'+icon('search')+'<input id="inventory-search" placeholder="Search name, address, or device group…" aria-label="Search device inventory" value="'+esc(state.search)+'"></label><select id="site-filter" aria-label="Filter by device group" data-control="site"><option value="all">All device groups</option>'+[...new Set(inventoryRecords.map(d=>d.site))].map(s=>'<option '+(state.site===s?'selected':'')+'>'+esc(s)+'</option>').join('')+'</select><select aria-label="Filter by impact" data-control="inventory-risk"><option value="all">All impact levels</option>'+['high','medium','unknown','low'].map(v=>'<option value="'+v+'" '+(state.inventoryRisk===v?'selected':'')+'>'+v[0].toUpperCase()+v.slice(1)+'</option>').join('')+'</select><span class="filter-summary">'+rows.length+' of '+inventoryRecords.length+' devices · DEMO</span></div><section class="card">'+(rows.length?'<div class="table-scroll"><table aria-label="Device inventory"><thead><tr><th>Device</th><th>Management address</th><th>Device group</th><th>Demo status</th><th>Potential impact</th><th></th></tr></thead><tbody>'+rows.map(d=>'<tr data-device="'+d.id+'" tabindex="0" aria-label="Open '+d.display_name+'"><td>'+deviceLabel(d)+'</td><td><span class="mono">'+esc(d.management_ip)+'</span><div class="card-subtitle">'+esc(d.model)+'</div></td><td>'+esc(d.site)+'</td><td>'+badge(d.status==='Healthy'?'healthy':d.risk,d.status)+'</td><td>'+badge(d.risk)+'</td><td class="arrow-cell">'+icon('chevron')+'</td></tr>').join('')+'</tbody></table></div>':empty('No matching devices','Try another name, address, device group or impact filter.'))+'</section>';
 }
 function backupTable(rows){
- if(!rows.length)return empty('No demo snapshots','Try selecting another sample device.');
- return'<div class="table-scroll"><table aria-label="Configuration backup history"><thead><tr><th>Snapshot</th><th>Device</th><th>Captured at · UTC</th><th>Configuration</th><th>Source</th><th>Explore</th></tr></thead><tbody>'+rows.map(b=>'<tr data-compare="'+b.device.id+'" data-right="'+b.id+'" tabindex="0"><td><strong>'+esc(b.label)+'</strong><div class="card-subtitle mono">'+esc(b.id.slice(-12))+'</div></td><td>'+esc(b.device.display_name)+'</td><td>'+date(b.created_at)+'<div class="card-subtitle">'+time(b.created_at)+'</div></td><td>'+badge('healthy','Running · demo')+'</td><td>'+esc(b.origin)+'</td><td><button class="text-link" data-action="snapshot" data-device-id="'+b.device.id+'" data-backup-id="'+b.id+'">View</button><span class="muted"> &nbsp;·&nbsp; </span><button class="text-link" data-action="compare" data-device-id="'+b.device.id+'" data-right="'+b.id+'">Compare '+icon('arrow')+'</button></td></tr>').join('')+'</tbody></table></div>';
+ if(!rows.length)return '<div class="empty-state">No synthetic snapshots in this section.</div>';
+ return '<div class="table-scroll"><table aria-label="Configuration backup history"><thead><tr><th>Snapshot</th><th>Device</th><th>Captured at · UTC</th><th>Configuration</th><th>Source</th><th>Explore</th></tr></thead><tbody>'+rows.map(b=>
+  '<tr'+(b.browser_memory?' data-compare="'+esc(b.device.id)+'" data-right="'+esc(b.id)+'" tabindex="0"':'')+'><td><button class="text-link" data-action="snapshot" data-device-id="'+esc(b.device.id)+'" data-backup-id="'+esc(b.id)+'"><strong>'+esc(b.label)+'</strong></button><div class="card-subtitle mono">'+esc(b.id)+'</div></td><td>'+esc(b.device.display_name)+'</td><td>'+date(b.created_at)+'<div class="card-subtitle">'+time(b.created_at)+'</div></td><td>'+badge('healthy','Running · synthetic')+'</td><td>'+esc(b.origin)+(b.content_hash?'<div class="card-subtitle mono">SHA-256 '+esc(b.content_hash.slice(0,12))+'…</div>':'')+'</td><td><button class="text-link" data-action="snapshot" data-device-id="'+esc(b.device.id)+'" data-backup-id="'+esc(b.id)+'">View</button><span class="muted"> · </span>'+
+  (b.browser_memory?'<button class="text-link" data-action="compare" data-device-id="'+esc(b.device.id)+'" data-right="'+esc(b.id)+'">Compare fixture copy</button>':'<a class="text-link" href="#/compare?device='+esc(b.device.id)+'">Fixture comparison</a>')+'</td></tr>').join('')+'</tbody></table></div>';
 }
 function backupsPage(route){
  const selected=route.query.get('device')||'all';
- return header('Configuration backups','A little history. A clearer picture.','Read-only synthetic history from HTTP. Local demo copies stay in this browser.',
-  btn('Refresh history','retry-backups','default','','activity')+btn('Create demo backup','create-backup','primary','data-device-id="'+(selected==='all'?state.selectedDevice:selected)+'"','plus'))+
-  '<div class="filterbar"><select data-control="backups-device" aria-label="Filter backups by device"><option value="all">All devices</option>'+
-  devices.map(d=>'<option value="'+d.id+'" '+(d.id===selected?'selected':'')+'>'+esc(d.display_name)+'</option>').join('')+
-  '</select><span class="filter-summary">DEMO / UNVERIFIED · no server writes</span></div>'+backupHistoryBody(selected);
+ const target=historyHTTP.devices.find(d=>d.id===(selected==='all'?state.selectedDevice:selected))||(selected==='all'?historyHTTP.devices[0]:null);
+ return header('Go configuration backups','Your demo history, backed by Go.','Only the four Go demo devices. Metadata in disposable SQLite; synthetic content read by BackupService.',
+  btn('Refresh history','retry-backups','default','','activity')+btn('Create demo backup','create-backup','primary','data-device-id="'+esc(target?.id||'')+'" '+(historyHTTP.status==='ready'&&target?'':'disabled'),'plus'))+
+  '<div class="filterbar"><select data-control="backups-device" aria-label="Filter backups by device" '+(historyHTTP.devices.length?'':'disabled')+'><option value="all">All Go demo devices</option>'+
+  historyHTTP.devices.map(d=>'<option value="'+esc(d.id)+'" '+(d.id===selected?'selected':'')+'>'+esc(d.display_name)+'</option>').join('')+
+  '</select><span class="filter-summary">'+historyHTTP.devices.length+' Go devices · DEMO / UNVERIFIED · read-only</span></div>'+backupHistoryBody(selected);
 }
 function deviceDetail(d){
  const facts=[['Hostname',d.hostname],['Management address',d.management_ip],['Device group',d.device_group],['Platform',d.platform],['Software version',d.version],['Serial number',d.serial],['Connection','Disabled · no live access'],['Data source',GO_SOURCE],['Vendor / protocol',d.vendor+' / '+d.protocol],['Device operations','Disabled · demo record']];
@@ -355,7 +378,7 @@ function deviceDetail(d){
  if(state.detailTab==='configuration')body='<section class="card">'+cardHead('Node DEMO configuration · separate from Go','Static synthetic fixture text. Go configuration reads are not connected.',demoTag())+'<pre class="config-view">'+esc(d.backups[0]?.config||'No synthetic configuration snapshot is available.')+'</pre></section>';
  else if(state.detailTab==='backups')body='<div class="backup-actions">'+btn('Refresh history','retry-backups','default','','activity')+btn('Create demo backup','create-backup','soft','data-device-id="'+d.id+'"','plus')+'</div>'+backupHistoryBody(d.id);
  else body='<section class="detail-grid"><article class="card">'+cardHead('Device profile','A sample record aligned with the inventory API.',demoTag())+'<div class="facts-grid">'+facts.map(([label,value])=>'<div><span class="fact-label">'+esc(label)+'</span><span class="fact-value">'+esc(value)+'</span></div>').join('')+'</div><div class="detail-note">'+icon('lock')+'Live connections, credentials, and configuration writes are disabled.</div></article><article class="card">'+cardHead('Demo configuration timeline','Separate Node synthetic backup flow · not backed by Go.')+'<div class="priority-list">'+d.backups.slice(0,3).map((b,i)=>'<button class="priority-item" data-action="compare" data-device-id="'+d.id+'" data-right="'+b.id+'"><span class="device-glyph">'+icon('archive')+'</span><span><strong>'+esc(b.label)+(i===0?' · latest':'')+'</strong><p>'+date(b.created_at)+' · '+time(b.created_at)+'</p><span class="small muted">Synthetic running configuration</span></span>'+icon('chevron')+'</button>').join('')+'</div><div class="priority-card-footer">'+icon('shield')+d.findings.length+' prewritten demo findings · '+badge(d.risk)+'</div></article></section>';
- return'<a class="back-link" href="#/devices">'+icon('arrow')+'Back to device inventory</a><section class="page-heading"><div class="device-heading">'+glyph(d)+'<div><div class="eyebrow">'+esc(d.site)+' / DEMO DEVICE</div><h1>'+esc(d.display_name)+'</h1><p>'+esc(d.management_ip)+' &nbsp;·&nbsp; '+esc(d.model)+' &nbsp;·&nbsp; '+badge(d.risk)+'</p></div></div><div class="heading-actions"><button class="btn" disabled title="Live device access is disabled in this demo">'+icon('lock')+'Connect to device</button>'+btn('Compare snapshots','compare','primary','data-device-id="'+d.id+'"','diff')+'</div></section>'+apiSource(deviceHTTP)+'<nav class="detail-tabs" aria-label="Device detail tabs">'+['overview','configuration','backups','risk'].map(t=>'<button class="'+(state.detailTab===t?'active':'')+'" data-action="detail-tab" data-tab="'+t+'" data-device-id="'+d.id+'">'+({overview:'Overview',configuration:'Configuration',backups:'Backup history',risk:'Risk review'}[t])+'</button>').join('')+'</nav>'+body;
+ return'<a class="back-link" href="#/devices">'+icon('arrow')+'Back to device inventory</a><section class="page-heading"><div class="device-heading">'+glyph(d)+'<div><div class="eyebrow">'+esc(d.site)+' / DEMO DEVICE</div><h1>'+esc(d.display_name)+'</h1><p>'+esc(d.management_ip)+' &nbsp;·&nbsp; '+esc(d.model)+' &nbsp;·&nbsp; '+badge(d.risk)+'</p></div></div><div class="heading-actions"><button class="btn" disabled title="Live device access is disabled in this demo">'+icon('lock')+'Connect to device</button>'+btn('Fixture comparison','compare','primary','data-device-id="'+d.id+'"','diff')+'</div></section>'+apiSource(deviceHTTP)+'<nav class="detail-tabs" aria-label="Device detail tabs">'+['overview','configuration','backups','risk'].map(t=>'<button class="'+(state.detailTab===t?'active':'')+'" data-action="detail-tab" data-tab="'+t+'" data-device-id="'+d.id+'">'+({overview:'Overview',configuration:'Configuration',backups:'Backup history',risk:'Risk review'}[t])+'</button>').join('')+'</nav>'+body;
 }
 function diffLines(left,right){
  const a=left.split('\n'),b=right.split('\n'),dp=Array.from({length:a.length+1},()=>new Uint16Array(b.length+1));
@@ -400,7 +423,7 @@ function riskPage(route){
   const done=state.reviewed.has(findingKey(f.device,f));
   return'<article class="finding '+(done?'review-complete':'')+'"><div class="finding-top"><span class="finding-symbol">'+icon(f.kind==='uncertainty'?'help':'shield')+'</span><h3>'+esc(f.title)+'</h3>'+badge(done?'reviewed':f.impact)+'</div><p>'+esc(f.description)+'</p><div class="finding-meta"><span>'+esc(f.device.display_name)+' · '+esc(f.kind)+' · '+esc(f.priority)+' review priority</span><button class="text-link" data-action="review-finding" data-device-id="'+f.device.id+'" data-finding-id="'+f.id+'">'+(done?'Undo demo review':'Mark demo reviewed')+'</button></div><details><summary>Explore this sample finding</summary><p>'+esc(f.detail)+'</p><button class="text-link" data-action="compare" data-device-id="'+f.device.id+'">Open synthetic configuration comparison '+icon('arrow')+'</button></details></article>';
  }).join('');
- return header('Change-risk review','A second look, with context.','Prewritten sample findings illustrate a review workflow. They are not real security assessments.',demoTag())+'<div class="demo-callout">'+icon('alert')+'DEMO / UNVERIFIED · No verified risk API is connected. Unknown impact is not low impact. Reviewing a sample does not approve or deploy a change.</div><div class="risk-layout"><section><div class="risk-summary"><div class="risk-score">'+icon('shield')+'</div><div><h2>'+pending+' sample findings to explore</h2><p>'+esc(scope)+'<br>Potential impact is advisory. All results shown here are synthetic.</p></div></div><div class="filterbar"><select data-control="risk-device" aria-label="Filter risk findings by device"><option value="all">All devices</option>'+devices.filter(d=>d.findings.length).map(d=>'<option value="'+d.id+'" '+(d.id===selected?'selected':'')+'>'+esc(d.display_name)+'</option>').join('')+'</select><select data-control="risk-impact" aria-label="Filter findings by impact"><option value="all">All impact levels</option>'+['high','medium','unknown'].map(v=>'<option value="'+v+'" '+(v===state.riskImpact?'selected':'')+'>'+v[0].toUpperCase()+v.slice(1)+'</option>').join('')+'</select><span class="filter-summary">'+filtered.length+' demo findings</span></div><div class="findings">'+(rows||'<div class="card">'+empty('No synthetic findings in this view','This does not mean the device is secure. Choose another sample or impact filter.')+'</div>')+'</div></section><aside class="risk-aside"><article class="card">'+cardHead('Review context','A sample, not an approval.')+'<div class="aside-body"><div class="aside-row"><span>Evidence source</span><strong>DEMO fixtures</strong></div><div class="aside-row"><span>Verified API</span><strong>Not connected</strong></div><div class="aside-row"><span>Scope</span><strong>Browser session</strong></div><div class="aside-row"><span>Device access</span><strong>Disabled</strong></div>'+btn('Mark demo reviewed','review-all','soft','data-device-id="'+selected+'"','check')+'</div></article><article class="card">'+cardHead('Keep the distinction clear','')+'<div class="aside-body"><p class="small muted" style="line-height:1.9">A demo review tracks your exploration here. It creates no authorization, audit evidence, or accepted security result.</p><div class="aside-row"><span>Phase E</span><strong>Deferred / not accepted</strong></div><div class="aside-row"><span>Production release</span><strong>Blocked</strong></div></div></article></aside></div>';
+ return header('Change-risk review','A second look, with context.','FIXTURE BASED · Prewritten sample findings; not connected to Go risk analysis or real security assessments.',demoTag())+'<div class="demo-callout">'+icon('alert')+'DEMO / UNVERIFIED · No verified risk API is connected. Unknown impact is not low impact. Reviewing a sample does not approve or deploy a change.</div><div class="risk-layout"><section><div class="risk-summary"><div class="risk-score">'+icon('shield')+'</div><div><h2>'+pending+' sample findings to explore</h2><p>'+esc(scope)+'<br>Potential impact is advisory. All results shown here are synthetic.</p></div></div><div class="filterbar"><select data-control="risk-device" aria-label="Filter risk findings by device"><option value="all">All devices</option>'+devices.filter(d=>d.findings.length).map(d=>'<option value="'+d.id+'" '+(d.id===selected?'selected':'')+'>'+esc(d.display_name)+'</option>').join('')+'</select><select data-control="risk-impact" aria-label="Filter findings by impact"><option value="all">All impact levels</option>'+['high','medium','unknown'].map(v=>'<option value="'+v+'" '+(v===state.riskImpact?'selected':'')+'>'+v[0].toUpperCase()+v.slice(1)+'</option>').join('')+'</select><span class="filter-summary">'+filtered.length+' demo findings</span></div><div class="findings">'+(rows||'<div class="card">'+empty('No synthetic findings in this view','This does not mean the device is secure. Choose another sample or impact filter.')+'</div>')+'</div></section><aside class="risk-aside"><article class="card">'+cardHead('Review context','A sample, not an approval.')+'<div class="aside-body"><div class="aside-row"><span>Evidence source</span><strong>DEMO fixtures</strong></div><div class="aside-row"><span>Verified API</span><strong>Not connected</strong></div><div class="aside-row"><span>Scope</span><strong>Browser session</strong></div><div class="aside-row"><span>Device access</span><strong>Disabled</strong></div>'+btn('Mark demo reviewed','review-all','soft','data-device-id="'+selected+'"','check')+'</div></article><article class="card">'+cardHead('Keep the distinction clear','')+'<div class="aside-body"><p class="small muted" style="line-height:1.9">A demo review tracks your exploration here. It creates no authorization, audit evidence, or accepted security result.</p><div class="aside-row"><span>Phase E</span><strong>Deferred / not accepted</strong></div><div class="aside-row"><span>Production release</span><strong>Blocked</strong></div></div></article></aside></div>';
 }
 function render(){
  const active=document.activeElement;
@@ -436,7 +459,7 @@ document.addEventListener('click',event=>{
   if(name==='retry-backups'){const route=routing();void loadBackupHistory(route.detail?route.requestedDeviceId:route.query.get('device')||'all');}
   if(name==='retry-compare')void loadComparison();
   if(name==='retry-snapshot')void showSnapshot(action.dataset.deviceId,action.dataset.backupId);
-  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory and device profiles use the existing Aegis Go API, native authentication/RBAC and a disposable SQLite database through a same-origin adapter. Backup history and comparison remain on the Node synthetic HTTP API. Dashboard and risk views retain fixtures; local snapshot copies stay in browser memory. No production backend, device credentials, SSH, production databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
+  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory and device profiles use the existing Aegis Go API, native authentication/RBAC and a disposable SQLite database through a same-origin adapter. Backup history and snapshot viewing use Go BackupService, disposable SQLite metadata and seeded synthetic files. Comparison remains on the Node fixture API. Dashboard and risk views retain fixtures; local snapshot copies stay in browser memory. No production backend, device credentials, SSH, production databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
   if(name==='activity')modal('Demo activity','<p>A sample activity stream. These are fictional events.</p>'+allBackups().slice(0,4).map(b=>'<div class="activity-modal-row">'+icon('archive')+' '+esc(b.device.display_name)+' · '+esc(b.label)+'<small>'+date(b.created_at)+' · '+time(b.created_at)+' · '+esc(b.origin)+'</small></div>').join(''));
   if(name==='close-modal')closeModal();
   if(name==='chart'){state.chartDays=Number(action.dataset.days);render();}
@@ -451,7 +474,7 @@ document.addEventListener('click',event=>{
    const local=localSnapshots(d.id);
    memorySnapshots.set(d.id,[{id:d.id+'-demo-'+Date.now(),device_id:d.id,source:'SYNTHETIC_DEMO',synthetic:true,browser_memory:true,
     label:'Local demo copy '+String(local.length+1).padStart(2,'0'),created_at:new Date().toISOString(),config_type:'running',
-    origin:'Browser memory · NOT persisted',config:d.backups[0].config},...local]);
+    origin:'Browser memory · fixture copy · NOT persisted',config:d.backups[0].config},...local]);
    render();toast('Synthetic copy created in this tab only. No API write; reload discards it.');
   }
   if(name==='review-finding'){const k=d.id+':'+action.dataset.findingId;if(state.reviewed.has(k))state.reviewed.delete(k);else state.reviewed.add(k);render();toast('Demo review updated in this browser only. No approval was created.');}
