@@ -31,10 +31,10 @@ const response=await fetch('/demo-data.json');
 if(!response.ok)throw new Error('Demo fixtures could not be loaded');
 const data=await response.json();
 const devices=data.devices;
-const state={search:'',site:'all',inventoryRisk:'all',selectedDevice:devices[0].id,detailTab:'overview',chartDays:7,onlyChanges:false,layout:'split',riskImpact:'all',reviewed:new Set()};
+const state={search:'',site:'all',inventoryRisk:'all',selectedDevice:devices[0].id,detailTab:'overview',onlyChanges:false,layout:'split',riskImpact:'all',reviewed:new Set()};
 const main=document.querySelector('#main');
 
-// HTTP views never fall back to fixture records. Dashboard/risk remain fixture demos.
+// Go workspace views never fall back to fixtures. Risk and local sample material remain separate.
 const GO_SOURCE='Aegis Go API — Isolated Demo';
 const GO_BACKUP_SOURCE='Aegis Go API — Disposable SQLite Demo';
 const inventoryHTTP={status:'idle',records:[],path:'/api/go/v1/devices',httpStatus:null,meta:null,elapsed:0,error:null,sequence:0};
@@ -65,6 +65,7 @@ async function loadInventory(){
   if(sequence!==inventoryHTTP.sequence)return;
   if(!Array.isArray(result.payload.data)||!result.payload.data.every(isInventoryRecord)||
       new Set(result.payload.data.map(d=>d.id)).size!==result.payload.data.length)throw new Error('The Go demo inventory response has an invalid device list.');
+  knownGoDeviceCount=result.payload.data.length;
   Object.assign(inventoryHTTP,{status:'ready',records:result.payload.data,httpStatus:result.httpStatus,meta:result.payload.meta,elapsed:result.elapsed});
  }catch(error){
   if(sequence!==inventoryHTTP.sequence)return;
@@ -145,6 +146,7 @@ async function loadBackupHistory(scope='all'){
   const inventory=await backupRequest('/api/go/v1/devices',GO_SOURCE);
   const goDevices=inventory.payload.data;
   if(!Array.isArray(goDevices)||!goDevices.every(isInventoryRecord)||new Set(goDevices.map(d=>d.id)).size!==goDevices.length)throw new Error('The Go API returned invalid inventory metadata.');
+  knownGoDeviceCount=goDevices.length;
   const ids=scope==='all'?goDevices.map(d=>d.id):[scope];
   const results=await Promise.all(ids.map(async id=>{
    const result=await readGoHistory(id);
@@ -200,6 +202,7 @@ async function loadComparison(route=routing()){
   const inventory=await backupRequest('/api/go/v1/devices',GO_SOURCE),goDevices=inventory.payload.data;
   if(!Array.isArray(goDevices)||!goDevices.every(isInventoryRecord))throw new Error('The Go API returned invalid inventory metadata.');
   if(sequence!==comparisonHTTP.sequence)return;
+  knownGoDeviceCount=goDevices.length;
   Object.assign(comparisonHTTP,{devices:goDevices,requests:[inventory.info]});
   if(!goDevices.length){Object.assign(comparisonHTTP,{status:'empty'});render();return;}
   const id=route.query.get('device')||(goDevices.some(d=>d.id===state.selectedDevice)?state.selectedDevice:goDevices[0].id);
@@ -263,7 +266,8 @@ async function showSnapshot(id,backupId){
 }
 function enterRoute(){
  const route=routing();
- if(route.view==='devices'){
+ if(route.view==='overview')void loadDashboard();
+ else if(route.view==='devices'){
   if(route.detail){void loadDevice(route.requestedDeviceId);if(state.detailTab==='backups')void loadBackupHistory(route.requestedDeviceId);}
   else void loadInventory();
  }else if(route.view==='backups')void loadBackupHistory(route.query.get('device')||'all');
@@ -274,9 +278,7 @@ function enterRoute(){
 const date=(value)=>new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value));
 const time=(value)=>new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}).format(new Date(value))+' UTC';
 const findDevice=id=>devices.find(d=>d.id===id)||devices[0];
-const allBackups=()=>devices.flatMap(d=>[...localSnapshots(d.id),...d.backups].map(b=>({...b,device:d}))).sort((a,b)=>b.created_at.localeCompare(a.created_at));
 const findingKey=(d,f)=>d.id+':'+f.id;
-const pendingDevices=()=>devices.filter(d=>d.findings.some(f=>!state.reviewed.has(findingKey(d,f))));
 const badge=(value,label)=>'<span class="badge '+esc(value)+'"><i></i>'+esc(label||({high:'High impact',medium:'Medium impact',low:'Low · demo',unknown:'Unknown',healthy:'Healthy',reviewed:'Demo reviewed'}[value]||value))+'</span>';
 const demoTag=()=>'<span class="tiny-tag">DEMO · UNVERIFIED</span>';
 const btn=(label,action,style='primary',extra='',glyph='arrow')=>'<button class="btn btn-'+style+'" data-action="'+action+'" '+extra+'>'+icon(glyph)+esc(label)+'</button>';
@@ -310,48 +312,84 @@ function compareTo(d,rightId,leftId){
  if(location.hash==='#/compare?'+target)void loadComparison();
  else go('compare',Object.fromEntries(new URLSearchParams(target)));
 }
-function stats(){
- const pending=pendingDevices().length;
- return'<section class="stats-grid" aria-label="Demo workspace summary">'+[
- ['Managed devices',devices.length,'Across 3 synthetic sites','server',false],
- ['Saved snapshots',allBackups().length,'Synthetic configuration backups','archive',false],
- ['Reviews to explore',pending,pending?'Prewritten demo findings':'All demo findings reviewed','shield',true],
- ['Demo backup coverage','100<small>%</small>','12 of 12 sample devices','check',false]
- ].map(([label,number,foot,symbol,accent])=>'<article class="stat '+(accent?'stat-accent':'')+'"><div class="stat-label">'+label+'<span class="stat-icon">'+icon(symbol)+'</span></div><div class="stat-number">'+number+'</div><div class="stat-foot"><i class="mini-dot"></i>'+foot+'</div></article>').join('')+'</section>';
+const dashboardHTTP={status:'idle',devices:[],backups:[],requests:[],sequence:0,path:'/api/go/v1/devices',source:GO_BACKUP_SOURCE};
+let knownGoDeviceCount=null;
+async function loadDashboard(){
+ const sequence=++dashboardHTTP.sequence;
+ Object.assign(dashboardHTTP,{status:'loading',devices:[],backups:[],requests:[],httpStatus:null,meta:null,error:null});knownGoDeviceCount=null;render();
+ try{
+  const inventory=await backupRequest('/api/go/v1/devices',GO_SOURCE),goDevices=inventory.payload.data;
+  if(!Array.isArray(goDevices)||!goDevices.every(d=>isInventoryRecord(d)&&typeof d.device_group==='string')||
+     new Set(goDevices.map(d=>d.id)).size!==goDevices.length)throw new Error('The Go API returned invalid dashboard inventory.');
+  const histories=await Promise.all(goDevices.map(async device=>{
+   const history=await readGoHistory(device.id);
+   return {...history,records:history.records.map(backup=>({...backup,device}))};
+  }));
+  if(sequence!==dashboardHTTP.sequence)return;
+  const backups=histories.flatMap(h=>h.records).sort((a,b)=>b.created_at.localeCompare(a.created_at)||a.device.display_name.localeCompare(b.device.display_name));
+  if(new Set(backups.map(b=>b.id)).size!==backups.length)throw new Error('The Go API returned duplicate backup identifiers.');
+  knownGoDeviceCount=goDevices.length;
+  Object.assign(dashboardHTTP,{status:'ready',devices:goDevices,backups,requests:[inventory.info,...histories.map(h=>h.info)]});
+ }catch(error){
+  if(sequence!==dashboardHTTP.sequence)return;
+  knownGoDeviceCount=null;
+  Object.assign(dashboardHTTP,backupFailure(error,dashboardHTTP.path,GO_BACKUP_SOURCE),{devices:[],backups:[],requests:[]});
+ }
+ render();
 }
-function chart(){
- const days=state.chartDays;
- const end=new Date('2026-10-28T00:00:00Z');
- const counts=Array.from({length:days},(_,i)=>{
-  const at=new Date(end);at.setUTCDate(at.getUTCDate()-(days-1-i));
-  const key=at.toISOString().slice(0,10);
-  return{day:at,count:allBackups().filter(b=>b.created_at.startsWith(key)).length};
- });
- const max=Math.max(4,...counts.map(x=>x.count));const width=550/days;const total=counts.reduce((s,x)=>s+x.count,0);
- let svg='<svg class="chart-svg" viewBox="0 0 640 180" role="img" aria-label="Synthetic backup activity over '+days+' days">';
- for(let i=0;i<4;i++){const y=20+i*40;svg+='<line x1="39" y1="'+y+'" x2="622" y2="'+y+'" class="chart-grid"/><text x="8" y="'+(y+3)+'" class="chart-label">'+Math.round(max*(1-i/3))+'</text>';}
- counts.forEach((row,i)=>{const h=row.count/max*115,x=50+i*width+(width-Math.min(26,width*.55))/2;
- svg+='<rect x="'+x+'" y="'+(140-h)+'" width="'+Math.min(26,width*.55)+'" height="'+Math.max(h,2)+'" rx="3" fill="'+(i===days-1?'#58784c':'#c7d7af')+'"><title>'+date(row.day)+': '+row.count+' synthetic backups</title></rect>';
- if(days===7||i%6===0||i===days-1)svg+='<text x="'+(50+i*width+width/2)+'" y="164" text-anchor="middle" class="chart-label">'+new Intl.DateTimeFormat('en',{month:'short',day:'numeric',timeZone:'UTC'}).format(row.day)+'</text>';
- });svg+='</svg>';
- return'<article class="card">'+cardHead('Backup activity','A little visibility goes a long way.','<div class="segmented" aria-label="Activity period"><button data-action="chart" data-days="7" class="'+(days===7?'active':'')+'">7 days</button><button data-action="chart" data-days="30" class="'+(days===30?'active':'')+'">30 days</button></div>')+'<div class="chart-wrap"><div class="chart-summary"><strong>'+total+'</strong><span>demo snapshots in this period</span></div>'+svg+'<div class="chart-legend"><span><i class="legend-dot"></i>Saved snapshots</span><span><i class="legend-dot dark"></i>Latest sample day</span></div></div><div class="chart-footer"><span>All activity is synthetic</span><a href="#/backups" class="text-link">Explore backup history '+icon('arrow')+'</a></div></article>';
+function dashboardValues(){
+ const records=dashboardHTTP.devices,backups=dashboardHTTP.backups;
+ const covered=new Set(backups.map(b=>b.device_id));
+ const groups=new Map();
+ for(const d of records)groups.set(d.device_group,(groups.get(d.device_group)||0)+1);
+ return {total:records.length,snapshots:backups.length,covered:records.filter(d=>covered.has(d.id)).length,
+  coverage:records.length?Math.round(100*records.filter(d=>covered.has(d.id)).length/records.length):null,
+  groups:[...groups].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])),latest:backups[0]||null};
 }
-function topology(){
- const nodes=[{x:175,y:85,id:'core-sw-01',name:'CORE-SW-01',core:true},{x:65,y:44,id:'access-sw-01',name:'Northstar HQ'},{x:285,y:44,id:'edge-rtr-01',name:'Harbor DC'},{x:65,y:140,id:'access-sw-04',name:'Cedar Branch'},{x:285,y:140,id:'core-sw-02',name:'CORE-SW-02'}];
- let svg='<svg class="topology-svg" viewBox="0 0 350 195" role="img" aria-label="Interactive synthetic network map">';
- svg+='<defs><pattern id="map-grid" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".6" fill="#dce8cd"/></pattern></defs><rect width="350" height="195" fill="url(#map-grid)"/>';
- for(const n of nodes.slice(1))svg+='<path d="M175 85 Q175 '+n.y+' '+n.x+' '+n.y+'" fill="none" stroke="#b7c9a2" stroke-width="1.2" stroke-dasharray="4 4"/>';
- for(const n of nodes)svg+='<g class="topo-node" role="link" tabindex="0" data-device="'+n.id+'" aria-label="Open '+n.id+'"><rect class="node-box" x="'+(n.x-20)+'" y="'+(n.y-17)+'" width="40" height="34" rx="9" fill="'+(n.core?'#466b3e':'#ffffff')+'" stroke="'+(n.core?'#466b3e':'#d6e2c9')+'"/><g transform="translate('+(n.x-10)+' '+(n.y-10)+') scale(.84)" stroke="'+(n.core?'#e5f4d1':'#8ba773')+'" fill="none" stroke-width="1.5" stroke-linecap="round">'+shapes.server+'</g><circle cx="'+(n.x+17)+'" cy="'+(n.y-14)+'" r="4" fill="'+(n.core?'#d3ac65':'#9dbb7b')+'" stroke="white" stroke-width="2"/><text x="'+n.x+'" y="'+(n.y+31)+'" text-anchor="middle" class="topology-label">'+n.name+'</text></g>';
- svg+='</svg>';
- return'<article class="card map-card">'+cardHead('Your network, at a glance','Select a node to explore.','<span class="tiny-tag">DEMO TOPOLOGY</span>')+svg+'<div class="map-footer"><span><i class="mini-dot"></i> 3 synthetic sites</span><span>No live discovery</span></div></article>';
+function dashboardCompareURL(backup){
+ const versions=dashboardHTTP.backups.filter(b=>b.device_id===backup.device_id);
+ const index=versions.findIndex(b=>b.id===backup.id),before=versions[index+1]||versions[index-1]||backup;
+ return '#/compare?'+new URLSearchParams({device:backup.device_id,left:before.id,right:backup.id});
+}
+function dashboardStats(values){
+ return '<section class="stats-grid" aria-label="Go dashboard summary">'+[
+  ['devices','Go devices',values.total,'From the current Go Inventory','server'],
+  ['snapshots','Saved snapshots',values.snapshots,'Persisted Go synthetic backups','archive'],
+  ['coverage','Backup coverage',values.coverage===null?'—':values.coverage+'%',values.covered+' of '+values.total+' Go devices have backups','check'],
+  ['groups','Device groups',values.groups.length,'Distinct device_group values','globe']
+ ].map(([key,label,value,foot,glyph])=>'<article class="stat" data-dashboard-metric="'+key+'" data-value="'+esc(value)+'"><div class="stat-label">'+label+'<span class="stat-icon">'+icon(glyph)+'</span></div><div class="stat-number">'+esc(value)+'</div><div class="stat-foot">'+esc(foot)+'</div></article>').join('')+'</section>';
+}
+function groupDistribution(values){
+ return '<article class="card group-card">'+cardHead('Device groups','Distribution from Go device_group metadata.','<span class="tiny-tag">GO METADATA</span>')+
+ '<div class="group-distribution" aria-label="Go device group distribution">'+values.groups.map(([group,count])=>'<div class="group-row" data-group="'+esc(group)+'" data-count="'+count+'"><div class="group-label"><strong>'+esc(group||'Ungrouped (empty field)')+'</strong><span>'+count+' device'+(count===1?'':'s')+'</span></div><div class="group-track"><span style="width:'+(values.total?count/values.total*100:0)+'%"></span></div></div>').join('')+'</div>'+
+ '<div class="chart-footer"><span>'+values.total+' devices across '+values.groups.length+' groups</span><a href="#/devices" class="text-link">Open Go Inventory '+icon('arrow')+'</a></div></article>';
+}
+function dashboardDeviceList(){
+ return '<article class="card dashboard-devices">'+cardHead('Your Go devices','The same records used by Inventory and Backup History.')+
+ '<div class="go-device-list">'+dashboardHTTP.devices.map(d=>{
+  const versions=dashboardHTTP.backups.filter(b=>b.device_id===d.id);
+  return '<div class="go-device-row"><span class="device-glyph">'+icon('server')+'</span><div class="go-device-facts"><a class="text-link" href="#/devices/'+encodeURIComponent(d.id)+'">'+esc(d.display_name)+'</a><small>'+esc(d.device_group||'Ungrouped')+' · '+esc(d.management_ip)+'</small></div><div class="go-device-backups"><strong>'+versions.length+'</strong><a href="#/backups?device='+encodeURIComponent(d.id)+'">Go backups '+icon('chevron')+'</a></div></div>';
+ }).join('')+'</div></article>';
+}
+function dashboardRecent(values){
+ const recent=dashboardHTTP.backups.slice(0,4);
+ return '<section class="card dashboard-recent">'+cardHead('Recent Go backups','Newest persisted records from this disposable demo.','<a class="text-link" href="#/backups">All '+values.snapshots+' Go backups '+icon('arrow')+'</a>')+
+ '<div class="recent-backup-list" aria-label="Recent Go backups">'+(recent.length?recent.map(b=>'<article class="recent-backup-row" data-backup-id="'+esc(b.id)+'"><div class="recent-backup-main"><span class="device-glyph">'+icon('archive')+'</span><div><button class="text-link" data-action="snapshot" data-device-id="'+esc(b.device_id)+'" data-backup-id="'+esc(b.id)+'">'+esc(b.label)+'</button><small><a href="#/devices/'+encodeURIComponent(b.device_id)+'">'+esc(b.device.display_name)+'</a> · '+esc(b.config_type)+'</small></div></div><div class="recent-backup-time">'+date(b.created_at)+'<small>'+time(b.created_at)+'</small></div><a class="btn btn-soft" href="'+esc(dashboardCompareURL(b))+'">'+icon('diff')+'Compare</a></article>').join(''):'<p class="session-note">No Go backups are stored for the current devices.</p>')+'</div></section>';
 }
 function overview(){
- const pending=pendingDevices();
- const recent=devices.filter(d=>d.risk!=='low');
- const table='<table aria-label="Recent demo changes"><thead><tr><th>Device</th><th>Configuration change</th><th>Potential impact</th><th>Snapshot</th><th></th></tr></thead><tbody>'+recent.map(d=>'<tr tabindex="0" data-compare="'+d.id+'"><td>'+deviceLabel(d)+'</td><td>'+esc(d.change_summary)+'</td><td>'+badge(d.risk)+'</td><td>'+time(d.backups[0].created_at)+'</td><td class="arrow-cell">'+icon('chevron')+'</td></tr>').join('')+'</tbody></table>';
- const priority=pending.slice(0,3).map(d=>'<button class="priority-item" data-route="/risk?device='+d.id+'"><span class="priority-symbol">'+icon(d.risk==='unknown'?'help':'shield')+'</span><span><strong>'+esc(d.findings[0].title)+'</strong><p>'+esc(d.display_name)+' · '+esc(d.site)+'</p>'+badge(d.risk)+'</span>'+icon('chevron')+'</button>').join('');
- return header('A little clarity. A lot of confidence.','Your network. In focus.','Explore your devices, understand changes, and make room for better decisions.','<span class="muted small">Sample · 28 Oct 2026</span>'+btn('View inventory','inventory','primary','','arrow'))+'<div class="demo-callout">'+icon('help')+'FIXTURE BASED · This dashboard shows the legacy 12-device sample. Go Inventory and backup history use four separate synthetic records.</div>'+stats()+'<section class="dashboard-grid">'+chart()+topology()+'</section><section class="dashboard-grid"><article class="card table-card">'+cardHead('Recent configuration changes','A synthetic change queue, ready to explore.',demoTag())+'<div class="table-scroll">'+table+'</div></article><article class="card">'+cardHead('Needs a closer look',pending.length+' demo devices in the review queue','<a href="#/risk" class="text-link">View all '+icon('arrow')+'</a>')+'<div class="priority-list">'+(priority||'<div class="empty-state">All demo findings reviewed.</div>')+'</div><div class="priority-card-footer">'+icon('help')+'Sample findings, not a real security assessment.</div></article></section><div class="card activity-strip"><span>'+icon('archive')+'Latest demo snapshot · '+esc(devices[0].display_name)+'</span><span>'+icon('lock')+'Live device connections disabled</span><button class="text-link" data-action="activity">View demo activity '+icon('arrow')+'</button></div>';
+ const heading=header('One isolated Go workspace','Your devices. One clear picture.','Inventory, backups and comparison share the same disposable Go data.',
+  btn('Refresh Dashboard','retry-dashboard','primary','','activity')+'<a class="btn" href="#/devices">'+icon('server')+'Go Inventory</a>');
+ if(dashboardHTTP.status==='idle'||dashboardHTTP.status==='loading')return heading+apiState({...dashboardHTTP,status:'loading'},'Loading Go Dashboard…','Reading current Go Inventory and its corresponding backup histories.','retry-dashboard');
+ if(dashboardHTTP.status!=='ready')return heading+apiState(dashboardHTTP,'Go Dashboard unavailable',dashboardHTTP.error,'retry-dashboard');
+ const values=dashboardValues();
+ const latest=values.latest;
+ return heading+'<div class="go-dashboard">'+httpEvidence(dashboardHTTP.requests,GO_BACKUP_SOURCE)+dashboardStats(values)+
+ (!values.total?'<section class="card api-state"><h2>No Go devices yet</h2><p>The Go Inventory returned an empty collection. No fixture records are shown.</p>'+btn('Retry','retry-dashboard')+'</section>':
+ '<div class="dashboard-latest"><span>'+icon('clock')+'Latest saved snapshot · UTC</span>'+(latest?'<button class="text-link" data-action="snapshot" data-device-id="'+esc(latest.device_id)+'" data-backup-id="'+esc(latest.id)+'" data-dashboard-latest="'+esc(latest.created_at)+'">'+date(latest.created_at)+' · '+time(latest.created_at)+'</button>':'<strong>No saved snapshots</strong>')+'<span class="tiny-tag">SYNTHETIC GO DATA</span></div>'+
+ '<section class="dashboard-grid">'+groupDistribution(values)+dashboardDeviceList()+'</section>'+dashboardRecent(values))+
+ '<aside class="fixture-risk-note">'+icon('shield')+'<div><strong>Risk Review is a separate demonstration</strong><p>FIXTURE DEMO — UNVERIFIED — NOT LINKED TO GO DATA</p></div><a href="#/risk" class="text-link">Open fixture Risk Review '+icon('arrow')+'</a></aside></div>';
 }
+
 function inventory(){
  const heading=header('Device inventory','A home for every device.','Synthetic records from the real Go API and disposable SQLite. Live access disabled; risk is not assessed.',btn('Refresh inventory','retry-inventory','primary','','activity')+btn('Export demo JSON','export','default',inventoryHTTP.status==='ready'?'':'disabled','download'));
  if(inventoryHTTP.status==='loading'||inventoryHTTP.status==='idle')return heading+apiState(inventoryHTTP,'Loading inventory…','Fetching synthetic devices from the isolated Aegis Go API.','retry-inventory');
@@ -451,7 +489,7 @@ function riskPage(route){
   const done=state.reviewed.has(findingKey(f.device,f));
   return'<article class="finding '+(done?'review-complete':'')+'"><div class="finding-top"><span class="finding-symbol">'+icon(f.kind==='uncertainty'?'help':'shield')+'</span><h3>'+esc(f.title)+'</h3>'+badge(done?'reviewed':f.impact)+'</div><p>'+esc(f.description)+'</p><div class="finding-meta"><span>'+esc(f.device.display_name)+' · '+esc(f.kind)+' · '+esc(f.priority)+' review priority</span><button class="text-link" data-action="review-finding" data-device-id="'+f.device.id+'" data-finding-id="'+f.id+'">'+(done?'Undo demo review':'Mark demo reviewed')+'</button></div><details><summary>Explore this sample finding</summary><p>'+esc(f.detail)+'</p><button class="text-link" data-action="compare" data-device-id="'+f.device.id+'">Open Go comparison (seeded devices only) '+icon('arrow')+'</button></details></article>';
  }).join('');
- return header('Change-risk review','A second look, with context.','FIXTURE BASED · Prewritten sample findings; not connected to Go risk analysis or real security assessments.',demoTag())+'<div class="demo-callout">'+icon('alert')+'DEMO / UNVERIFIED · No verified risk API is connected. Unknown impact is not low impact. Reviewing a sample does not approve or deploy a change.</div><div class="risk-layout"><section><div class="risk-summary"><div class="risk-score">'+icon('shield')+'</div><div><h2>'+pending+' sample findings to explore</h2><p>'+esc(scope)+'<br>Potential impact is advisory. All results shown here are synthetic.</p></div></div><div class="filterbar"><select data-control="risk-device" aria-label="Filter risk findings by device"><option value="all">All devices</option>'+devices.filter(d=>d.findings.length).map(d=>'<option value="'+d.id+'" '+(d.id===selected?'selected':'')+'>'+esc(d.display_name)+'</option>').join('')+'</select><select data-control="risk-impact" aria-label="Filter findings by impact"><option value="all">All impact levels</option>'+['high','medium','unknown'].map(v=>'<option value="'+v+'" '+(v===state.riskImpact?'selected':'')+'>'+v[0].toUpperCase()+v.slice(1)+'</option>').join('')+'</select><span class="filter-summary">'+filtered.length+' demo findings</span></div><div class="findings">'+(rows||'<div class="card">'+empty('No synthetic findings in this view','This does not mean the device is secure. Choose another sample or impact filter.')+'</div>')+'</div></section><aside class="risk-aside"><article class="card">'+cardHead('Review context','A sample, not an approval.')+'<div class="aside-body"><div class="aside-row"><span>Evidence source</span><strong>DEMO fixtures</strong></div><div class="aside-row"><span>Verified API</span><strong>Not connected</strong></div><div class="aside-row"><span>Scope</span><strong>Browser session</strong></div><div class="aside-row"><span>Device access</span><strong>Disabled</strong></div>'+btn('Mark demo reviewed','review-all','soft','data-device-id="'+selected+'"','check')+'</div></article><article class="card">'+cardHead('Keep the distinction clear','')+'<div class="aside-body"><p class="small muted" style="line-height:1.9">A demo review tracks your exploration here. It creates no authorization, audit evidence, or accepted security result.</p><div class="aside-row"><span>Phase E</span><strong>Deferred / not accepted</strong></div><div class="aside-row"><span>Production release</span><strong>Blocked</strong></div></div></article></aside></div>';
+ return header('Change-risk review','A second look, with context.','FIXTURE DEMO — UNVERIFIED — NOT LINKED TO GO DATA',demoTag())+'<div class="demo-callout">'+icon('alert')+'DEMO / UNVERIFIED · No verified risk API is connected. Unknown impact is not low impact. Reviewing a sample does not approve or deploy a change.</div><div class="risk-layout"><section><div class="risk-summary"><div class="risk-score">'+icon('shield')+'</div><div><h2>'+pending+' sample findings to explore</h2><p>'+esc(scope)+'<br>Potential impact is advisory. All results shown here are synthetic.</p></div></div><div class="filterbar"><select data-control="risk-device" aria-label="Filter risk findings by device"><option value="all">All devices</option>'+devices.filter(d=>d.findings.length).map(d=>'<option value="'+d.id+'" '+(d.id===selected?'selected':'')+'>'+esc(d.display_name)+'</option>').join('')+'</select><select data-control="risk-impact" aria-label="Filter findings by impact"><option value="all">All impact levels</option>'+['high','medium','unknown'].map(v=>'<option value="'+v+'" '+(v===state.riskImpact?'selected':'')+'>'+v[0].toUpperCase()+v.slice(1)+'</option>').join('')+'</select><span class="filter-summary">'+filtered.length+' demo findings</span></div><div class="findings">'+(rows||'<div class="card">'+empty('No synthetic findings in this view','This does not mean the device is secure. Choose another sample or impact filter.')+'</div>')+'</div></section><aside class="risk-aside"><article class="card">'+cardHead('Review context','A sample, not an approval.')+'<div class="aside-body"><div class="aside-row"><span>Evidence source</span><strong>DEMO fixtures</strong></div><div class="aside-row"><span>Verified API</span><strong>Not connected</strong></div><div class="aside-row"><span>Scope</span><strong>Browser session</strong></div><div class="aside-row"><span>Device access</span><strong>Disabled</strong></div>'+btn('Mark demo reviewed','review-all','soft','data-device-id="'+selected+'"','check')+'</div></article><article class="card">'+cardHead('Keep the distinction clear','')+'<div class="aside-body"><p class="small muted" style="line-height:1.9">A demo review tracks your exploration here. It creates no authorization, audit evidence, or accepted security result.</p><div class="aside-row"><span>Phase E</span><strong>Deferred / not accepted</strong></div><div class="aside-row"><span>Production release</span><strong>Blocked</strong></div></div></article></aside></div>';
 }
 function render(){
  const active=document.activeElement;
@@ -459,9 +497,8 @@ function render(){
  const route=routing();
  document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===route.view));
  document.querySelector('#breadcrumb').textContent=route.detail?(deviceHTTP.status==='ready'&&deviceHTTP.id===route.requestedDeviceId?deviceHTTP.record.display_name:'Device details'):({overview:'Overview',devices:'Device inventory',backups:'Configuration backups',compare:'Compare configurations',risk:'Risk reviews'}[route.view]);
- document.querySelector('#review-count').textContent=pendingDevices().length;
- document.querySelector('.nav-count').textContent=inventoryHTTP.status==='ready'?inventoryHTTP.records.length:'—';
- main.setAttribute('aria-busy',String((route.view==='devices'&&(route.detail?deviceHTTP.status==='loading'||state.detailTab==='backups'&&historyHTTP.status==='loading':inventoryHTTP.status==='loading'))||route.view==='backups'&&historyHTTP.status==='loading'||route.view==='compare'&&comparisonHTTP.status==='loading'));
+ document.querySelector('#inventory-count').textContent=knownGoDeviceCount===null?'—':knownGoDeviceCount;
+ main.setAttribute('aria-busy',String((route.view==='overview'&&dashboardHTTP.status==='loading')||(route.view==='devices'&&(route.detail?deviceHTTP.status==='loading'||state.detailTab==='backups'&&historyHTTP.status==='loading':inventoryHTTP.status==='loading'))||route.view==='backups'&&historyHTTP.status==='loading'||route.view==='compare'&&comparisonHTTP.status==='loading'));
  main.innerHTML=route.detail?inventoryDevicePage(route):({overview:overview,devices:inventory,backups:()=>backupsPage(route),compare:()=>comparePage(route),risk:()=>riskPage(route)}[route.view])();
  iconize();
  if(focus){const next=document.getElementById(focus.id);if(next){next.focus({preventScroll:true});if(typeof focus.start==='number'&&next.setSelectionRange)try{next.setSelectionRange(focus.start,focus.end);}catch{}}}
@@ -482,23 +519,23 @@ document.addEventListener('click',event=>{
  if(action){
   const name=action.dataset.action,d=findDevice(action.dataset.deviceId||state.selectedDevice);
   if(name==='inventory')go('devices');
+  if(name==='retry-dashboard')void loadDashboard();
   if(name==='retry-inventory')void loadInventory();
   if(name==='retry-device')void loadDevice(routing().requestedDeviceId);
   if(name==='retry-backups'){const route=routing();void loadBackupHistory(route.detail?route.requestedDeviceId:route.query.get('device')||'all');}
   if(name==='retry-compare')void loadComparison();
   if(name==='refresh-compare'){const requested=routing().query.get('device');const id=comparisonHTTP.devices.some(d=>d.id===requested)?requested:comparisonHTTP.device?.id;const target='/compare'+(id?'?'+new URLSearchParams({device:id}):'');if(location.hash==='#'+target)void loadComparison();else location.hash=target;}
   if(name==='retry-snapshot')void showSnapshot(action.dataset.deviceId,action.dataset.backupId);
-  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory and device profiles use the existing Aegis Go API, native authentication/RBAC and a disposable SQLite database through a same-origin adapter. Backup history and snapshot viewing use Go BackupService, disposable SQLite metadata and seeded synthetic files. Comparison uses native Go BackupService.Diff and the same Go snapshot contents; browser alignment is presentation only. Dashboard and risk views retain fixtures; local snapshot copies stay in browser memory. No production backend, device credentials, SSH, production databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
-  if(name==='activity')modal('Demo activity','<p>A sample activity stream. These are fictional events.</p>'+allBackups().slice(0,4).map(b=>'<div class="activity-modal-row">'+icon('archive')+' '+esc(b.device.display_name)+' · '+esc(b.label)+'<small>'+date(b.created_at)+' · '+time(b.created_at)+' · '+esc(b.origin)+'</small></div>').join(''));
+  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory and device profiles use the existing Aegis Go API, native authentication/RBAC and a disposable SQLite database through a same-origin adapter. Backup history and snapshot viewing use Go BackupService, disposable SQLite metadata and seeded synthetic files. Comparison uses native Go BackupService.Diff and the same Go snapshot contents; browser alignment is presentation only. Dashboard uses the same Go Inventory and backup histories. Risk Review is a separate fixture demonstration; local copies stay in browser memory. No production backend, device credentials, SSH, production databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
+  if(name==='activity')go('backups');
   if(name==='close-modal')closeModal();
-  if(name==='chart'){state.chartDays=Number(action.dataset.days);render();}
   if(name==='layout'){state.layout=action.dataset.layout;render();}
   if(name==='reset-filters'){state.search='';state.site='all';state.inventoryRisk='all';state.riskImpact='all';document.querySelector('#global-search').value='';render();}
   if(name==='detail-tab'){if(action.dataset.tab==='risk'){go('risk',{device:d.id});}else{state.detailTab=action.dataset.tab;if(state.detailTab==='backups')void loadBackupHistory(d.id);else render();}}
-  if(name==='compare')compareTo(d,action.dataset.right);
+  if(name==='compare')compareTo({id:action.dataset.deviceId||state.selectedDevice},action.dataset.right);
   if(name==='risk')go('risk',{device:d.id});
   if(name==='swap'){const l=document.querySelector('#compare-left').value,r=document.querySelector('#compare-right').value;go('compare',{device:comparisonHTTP.device.id,left:r,right:l});}
-  if(name==='snapshot')void showSnapshot(d.id,action.dataset.backupId);
+  if(name==='snapshot')void showSnapshot(action.dataset.deviceId,action.dataset.backupId);
   if(name==='create-backup'){
    const local=localSnapshots(d.id);
    memorySnapshots.set(d.id,[{id:d.id+'-demo-'+Date.now(),device_id:d.id,source:'SYNTHETIC_DEMO',synthetic:true,browser_memory:true,

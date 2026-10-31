@@ -4,21 +4,21 @@
 <div class="shell">
 <aside class="sidebar">
 <a class="brand" href="#/overview" aria-label="Aegis overview"><span class="brand-icon">✳</span><span>AEGIS<small>NETWORK WORKSPACE</small></span></a>
-<div class="workspace"><span class="workspace-avatar">N</span><span>Northstar workspace<small>Local demo environment</small></span><span class="workspace-dot"></span></div>
+<div class="workspace"><span class="workspace-avatar">G</span><span>Isolated Go workspace<small>Disposable synthetic data</small></span><span class="workspace-dot"></span></div>
 <div class="nav-label">WORKSPACE</div>
 <nav aria-label="Main navigation">
 <a href="#/overview" data-nav="overview"><span data-icon="dashboard"></span>Overview</a>
-<a href="#/devices" data-nav="devices"><span data-icon="server"></span>Device inventory<span class="nav-count">12</span></a>
+<a href="#/devices" data-nav="devices"><span data-icon="server"></span>Device inventory<span class="nav-count" id="inventory-count">—</span></a>
 <a href="#/backups" data-nav="backups"><span data-icon="archive"></span>Configuration backups</a>
 <a href="#/compare" data-nav="compare"><span data-icon="diff"></span>Compare configurations</a>
-<a href="#/risk" data-nav="risk"><span data-icon="shield"></span>Risk reviews<span class="nav-count" id="review-count">4</span></a>
+<a href="#/risk" data-nav="risk"><span data-icon="shield"></span>Risk Review<span class="fixture-nav-tag">Fixture</span></a>
 </nav>
 <div class="sidebar-note"><div class="note-mark"><span data-icon="lock"></span> A contained workspace</div><p>Explore freely.<br>Live device access is off.</p><span class="local-pill"><i></i> LOCAL DEMO</span></div>
 <button class="sidebar-help" data-action="about"><span data-icon="help"></span>About this preview<span data-icon="arrow-up-right"></span></button>
-<div class="sidebar-user"><span class="avatar">DM</span><span>Demo operator<small>Preview workspace</small></span><span data-icon="chevron"></span></div>
+<div class="sidebar-user"><span class="avatar">DM</span><span>Demo viewer<small>Read-only workspace</small></span><span data-icon="chevron"></span></div>
 </aside>
 <div class="workspace-main">
-<header class="topbar"><div class="breadcrumbs"><span>Workspace</span><span>/</span><strong id="breadcrumb">Overview</strong></div><div class="topbar-right"><label class="global-search"><span data-icon="search"></span><input id="global-search" placeholder="Find a device…" aria-label="Find a device"><kbd>/</kbd></label><button class="icon-button" data-action="activity" aria-label="Demo activity"><span data-icon="bell"></span><i class="notification-dot"></i></button><span class="topbar-divider"></span><span class="avatar avatar-light">DM</span></div></header>
+<header class="topbar"><div class="breadcrumbs"><span>Workspace</span><span>/</span><strong id="breadcrumb">Overview</strong></div><div class="topbar-right"><label class="global-search"><span data-icon="search"></span><input id="global-search" placeholder="Find a device…" aria-label="Find a device"><kbd>/</kbd></label><button class="icon-button" data-action="activity" aria-label="Open Go backup history"><span data-icon="archive"></span></button><span class="topbar-divider"></span><span class="avatar avatar-light">DM</span></div></header>
 <div class="demo-banner"><span class="demo-label">PREVIEW</span><span>DEMO — SYNTHETIC DATA — UNVERIFIED RISK FINDINGS <strong>· No live connections.</strong></span><button data-action="about">About this preview <span data-icon="arrow-up-right"></span></button></div>
 <main id="main" tabindex="-1"><div class="loading">Opening your workspace…</div></main>
 <footer class="page-footer"><span><i></i> Local preview · Synthetic data only</span><span>Phase E deferred · Production release blocked</span></footer>

@@ -2,7 +2,7 @@
 
 **DEMO — SYNTHETIC DATA — UNVERIFIED RISK FINDINGS**
 
-Inventory, device profiles, Backup History, snapshot viewing and Configuration Comparison use the existing Go API, native authentication/RBAC, services and disposable SQLite. Dashboard and risk review remain explicitly fixture-based demonstrations. This zero-dependency Node/HTML preview is not the final Vue implementation; the [Vue architecture](../../../docs/vue-integration.md) remains the intended frontend direction.
+Dashboard, Inventory, device profiles, Backup History, snapshot viewing and Configuration Comparison share the existing Go API, native authentication/RBAC, services and disposable SQLite. Risk Review remains separate: **FIXTURE DEMO — UNVERIFIED — NOT LINKED TO GO DATA**. This zero-dependency Node/HTML preview is not the final Vue implementation; the [Vue architecture](../../../docs/vue-integration.md) remains the intended frontend direction.
 
 ## Run the isolated Go-backed preview
 
@@ -25,15 +25,24 @@ Then run from any directory, replacing the absolute paths:
 
 On non-Windows systems the binary may be named aegis-inventory-demo. An optional --port=4318 fixes only the preview port. Both servers bind to 127.0.0.1; no bind-address override exists.
 
-The supervisor prints only non-secret Go/preview URLs, seed counts and a sanitized authentication result. Open the preview URL with #/devices, #/backups or #/compare. The ignored runtime.json holds the preview URL/PID, never credentials. The supervisor accepts these local terminal commands:
+The supervisor prints only non-secret Go/preview URLs, seed counts and a sanitized authentication result. Open the preview URL with #/overview, #/devices, #/backups or #/compare. The ignored runtime.json holds the preview URL/PID, never credentials. The supervisor accepts these local terminal commands:
 
-- **stop-api:** stop only its Go child; Inventory/history/comparison show unavailable while the preview and fixture-based Dashboard/Risk Review remain available.
+- **stop-api:** stop only its Go child; refreshed Dashboard/Inventory/history/comparison show unavailable while the preview and separate fixture Risk Review remain available.
 - **start-api:** create a fresh disposable SQLite database and identity session; then press Retry in the browser.
 - **quit** or Ctrl+C: stop this supervisor and its Go child.
 
 Each Go start creates a new aegis-inventory-demo-* directory under the external parent. It never accepts a database DSN or opens an existing database. Disposable directories are retained on shutdown; the supervisor never cleans, restores or automatically reruns them.
 
-Running server.mjs alone still serves Dashboard/Risk Review fixtures, but Go Inventory, Backup History and Compare explicitly show unavailable. They never substitute Node fixture results.
+Running server.mjs alone still serves the separate Risk Review fixture, but Dashboard, Inventory, Backup History and Compare explicitly show unavailable. They never substitute Node fixture results.
+
+## Unified Go Dashboard
+
+- Dashboard uses only existing bridge reads: GET /api/go/v1/devices and GET /api/go/v1/devices/:id/backups for every returned device. No new Go endpoint, aggregation service or permission is introduced.
+- Device count comes from that Inventory response; snapshot count sums its corresponding histories; coverage counts unique Go devices with at least one saved backup. Latest timestamp and recent rows come from those same persisted records. An empty Inventory shows zero counts and unavailable percentage, rather than fixture devices.
+- Group distribution counts the actual device_group values. It represents no network links, neighbors, health or risk assessment. No fixture risk totals enter Dashboard metrics.
+- Device links open Go profiles, snapshot buttons read native BackupService.Content, and Compare links carry actual current Go backup UUIDs. Refresh Dashboard reads the complete collection again after a Go restart; loading/failure clears the displayed metrics and records instead of retaining a misleading old result.
+- The shared Inventory navigation counter uses the successfully loaded Go device count. The history shortcut opens Go Backup History. Source/request details are available in a collapsed disclosure.
+- The isolated seed currently gives **4 devices, 12 snapshots, 100% coverage and 3 groups**. The UI calculates these from responses; they are not hardcoded Dashboard values. Risk Review has its own explicit fixture notice and no numeric navigation badge.
 
 ## Real Go Inventory flow
 
@@ -84,15 +93,15 @@ Inventory shows **Aegis Go API — Isolated Demo**, actual GET paths/status and 
 
 - GET /api/mock/v1/devices/:id/backups: synthetic metadata without configuration text.
 - GET /api/mock/v1/devices/:id/backups/:backupId: selected synthetic configuration text.
-- These retain the Local Mock API source, synthetic markers and request IDs as legacy material. Inventory, Backup History and Compare never use them as fallback.
+- These retain the Local Mock API source, synthetic markers and request IDs as legacy material. Dashboard, Inventory, Backup History and Compare never use them as fallback.
 - The active Compare screen uses Go snapshots only. Older independent demo workspaces retain their previous fixture comparison experience.
 - Browser-memory copies can still be viewed, but their Compare action is removed and they are explicitly excluded from Go comparison.
 - Create demo backup copies a legacy fixture only into browser memory, in a separate section labeled NOT persisted to Go or Node. It creates no HTTP backup, SQLite row or file. Reload discards it.
-- Dashboard counts/topology, the sample Configuration tab and prewritten risk findings remain explicitly fixture-based. Reviewing a finding does not create authorization or security acceptance.
+- The sample Configuration tab and prewritten risk findings remain explicitly fixture-based. Risk Review is labeled **FIXTURE DEMO — UNVERIFIED — NOT LINKED TO GO DATA**. Reviewing a finding does not create authorization or security acceptance.
 
 ## Minimal validation and limits
 
-Node syntax checks, a build of only cmd/inventory-demo with offline dependency verification, focused HTTP Diff/content/count/authorization/404 checks, browser comparison controls, narrow-layout checks and a controlled Go stop/start with stale-selection refresh cover this milestone. Existing Inventory and Backup History remain usable. These are not Phase E, race, capacity, performance or release validation.
+For the Dashboard milestone, Node syntax checks, five existing HTTP reads, browser metric/link checks, desktop/narrow layouts and a controlled Go stop/start verify the visible flow. The unchanged, previously built Go 1.26.10 demo binary is reused; no backend build or dependency change is needed. Existing Inventory, Backup History, Content and native Diff remain usable. These checks are not Phase E, race, capacity, performance or release validation.
 
 No real SSH, external device addresses, credential handling, production database, discovery or configuration changes are enabled.
 
