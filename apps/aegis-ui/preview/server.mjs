@@ -12,10 +12,16 @@ if (fixture.mode !== 'DEMO' || !Array.isArray(fixture.devices) ||
     fixture.devices.some(device => device.source !== 'SYNTHETIC_DEMO')) {
   throw new Error('Only the reviewed synthetic DEMO fixture can supply the mock API.');
 }
-// Inventory metadata only; configurations/findings stay in the existing demo views.
+// Inventory endpoints expose metadata only. Snapshot text has its own GET endpoint.
 const mockDevices = fixture.devices.map(({backups, findings, ...device}) => ({
   ...device, backup_count: backups.length, finding_count: findings.length
 }));
+const mockBackups = new Map(fixture.devices.map(device => [device.id, device.backups.map(backup => {
+  if (typeof backup.config !== 'string' || !backup.config.startsWith('! AEGIS SYNTHETIC DEMO — NOT A DEVICE CONFIGURATION\n')) {
+    throw new Error('Every mock snapshot must carry the reviewed synthetic configuration banner.');
+  }
+  return {...backup,device_id:device.id,source:'SYNTHETIC_DEMO',synthetic:true};
+})]));
 const args = process.argv.slice(2);
 if (args.length > 1 || (args.length && !/^--port=\d+$/.test(args[0]))) {
   throw new Error('Usage: node server.mjs [--port=0..65535]');
@@ -36,13 +42,24 @@ const server = http.createServer(async (req,res)=>{
         ...(status === 405 ? {'Allow':'GET'} : {})});
       res.end(JSON.stringify({...body,meta}));
     };
-    if (req.method !== 'GET') return json(405,{error:{code:'METHOD_NOT_ALLOWED',message:'The mock inventory API supports GET only.'}});
+    if (req.method !== 'GET') return json(405,{error:{code:'METHOD_NOT_ALLOWED',message:'The mock API supports GET only.'}});
     if (pathname === '/api/mock/v1/devices') return json(200,{data:mockDevices});
-    let id;
-    try { id = decodeURIComponent(pathname.slice('/api/mock/v1/devices/'.length)); }
+    const parts = pathname.slice('/api/mock/v1/devices/'.length).split('/');
+    if (!(parts.length === 1 || (parts[1] === 'backups' && [2,3].includes(parts.length))) || parts.some(part => !part)) {
+      return json(404,{error:{code:'ENDPOINT_NOT_FOUND',message:'This mock API endpoint was not found.'}});
+    }
+    let id, backupId;
+    try { id = decodeURIComponent(parts[0]); backupId = parts[2] === undefined ? undefined : decodeURIComponent(parts[2]); }
     catch { return json(400,{error:{code:'INVALID_DEVICE_ID',message:'The device identifier is not valid.'}}); }
     const device = mockDevices.find(candidate => candidate.id === id);
     if (!device) return json(404,{error:{code:'DEVICE_NOT_FOUND',message:'This synthetic device was not found.'}});
+    if (parts[1] === 'backups') {
+      const backups = mockBackups.get(id);
+      if (backupId === undefined) return json(200,{data:backups.map(({config,...metadata}) => metadata)});
+      const backup = backups.find(candidate => candidate.id === backupId);
+      if (!backup) return json(404,{error:{code:'BACKUP_NOT_FOUND',message:'This synthetic snapshot was not found for this device.'}});
+      return json(200,{data:backup});
+    }
     return json(200,{data:device});
   }
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405,{'Allow':'GET, HEAD'});return res.end('Preview is read-only');}

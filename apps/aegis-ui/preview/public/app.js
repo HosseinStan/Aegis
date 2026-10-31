@@ -34,7 +34,7 @@ const devices=data.devices;
 const state={search:'',site:'all',inventoryRisk:'all',selectedDevice:devices[0].id,detailTab:'overview',chartDays:7,onlyChanges:false,layout:'split',riskImpact:'all',reviewed:new Set()};
 const main=document.querySelector('#main');
 
-// Inventory has its own HTTP collection. Other demo views keep their fixtures.
+// HTTP views never fall back to fixture records. Dashboard/risk remain fixture demos.
 const inventoryHTTP={status:'idle',records:[],path:'/api/mock/v1/devices',httpStatus:null,meta:null,elapsed:0,error:null,sequence:0};
 const deviceHTTP={status:'idle',id:null,record:null,path:null,httpStatus:null,meta:null,elapsed:0,error:null,sequence:0};
 function isInventoryRecord(record){
@@ -110,16 +110,143 @@ function inventoryDevicePage(route){
  const legacy=devices.find(d=>d.id===deviceHTTP.record.id);
  return deviceDetail({...deviceHTTP.record,backups:legacy?.backups||[],findings:legacy?.findings||[]});
 }
+// Session-only snapshots are deliberately separate from immutable HTTP history.
+const memorySnapshots=new Map();
+const localSnapshots=id=>memorySnapshots.get(id)||[];
+const historyHTTP={status:'idle',scope:null,records:[],requests:[],sequence:0};
+const comparisonHTTP={status:'idle',records:[],requests:[],left:null,right:null,sequence:0};
+let snapshotSequence=0;
+const backupPath=id=>'/api/mock/v1/devices/'+encodeURIComponent(id)+'/backups';
+function isBackup(record,id,withConfig=false){
+ return record&&record.device_id===id&&record.source==='SYNTHETIC_DEMO'&&record.synthetic===true&&
+  ['id','label','created_at','config_type','origin'].every(key=>typeof record[key]==='string'&&record[key].length>0)&&
+  Number.isFinite(Date.parse(record.created_at))&&(!withConfig||
+   (typeof record.config==='string'&&record.config.startsWith('! AEGIS SYNTHETIC DEMO — NOT A DEVICE CONFIGURATION\n')));
+}
+async function backupRequest(path){
+ try{
+  const result=await requestMockAPI(path);
+  return {...result,info:{status:'ready',path,httpStatus:result.httpStatus,meta:result.payload.meta,elapsed:result.elapsed}};
+ }catch(error){error.path=path;throw error;}
+}
+async function readHistory(id){
+ const result=await backupRequest(backupPath(id)),records=result.payload.data;
+ if(!Array.isArray(records)||!records.every(b=>isBackup(b,id))||new Set(records.map(b=>b.id)).size!==records.length){
+  throw Object.assign(new Error('The mock API returned an invalid synthetic backup history.'),{path:backupPath(id)});
+ }
+ return {records,info:result.info};
+}
+async function readSnapshot(id,backupId){
+ const path=backupPath(id)+'/'+encodeURIComponent(backupId),result=await backupRequest(path);
+ if(!isBackup(result.payload.data,id,true)||result.payload.data.id!==backupId){
+  throw Object.assign(new Error('The mock API returned an unexpected synthetic snapshot.'),{path});
+ }
+ return {record:result.payload.data,info:result.info};
+}
+function backupFailure(error,fallbackPath){
+ return {status:error.httpStatus===404?'not-found':'error',path:error.path||fallbackPath,
+  httpStatus:error.httpStatus||null,meta:error.meta||null,elapsed:0,
+  error:(error.httpStatus||error.path&&error.message.startsWith('The mock API returned'))?error.message:
+   'Could not load synthetic backups from the Local Mock API. Check the local preview server, then Retry.'};
+}
+function httpEvidence(requests){
+ return '<div class="api-source api-ready"><div class="api-source-label">'+icon('server')+
+  '<strong>Local Mock API</strong><span class="api-status">HTTP 200 · '+requests.length+' GET response'+(requests.length===1?'':'s')+
+  '</span></div><details class="api-request-id"><summary>HTTP sources &amp; response request IDs</summary>'+
+  requests.map(info=>'<div class="api-source-detail"><a href="'+esc(info.path)+'" target="_blank" rel="noopener">GET '+esc(info.path)+
+   '</a><span>'+info.elapsed+' ms · <code>'+esc(info.meta.request_id)+'</code></span></div>').join('')+'</details></div>';
+}
+async function loadBackupHistory(scope='all'){
+ const sequence=++historyHTTP.sequence;
+ Object.assign(historyHTTP,{status:'loading',scope,records:[],requests:[],path:backupPath(scope==='all'?devices[0].id:scope),httpStatus:null,meta:null});render();
+ try{
+  const ids=scope==='all'?devices.map(d=>d.id):[scope];
+  const results=await Promise.all(ids.map(async id=>{
+   const result=await readHistory(id);
+   return {...result,records:result.records.map(b=>({...b,device:devices.find(d=>d.id===id)||{id,display_name:id}}))};
+  }));
+  if(sequence!==historyHTTP.sequence)return;
+  Object.assign(historyHTTP,{status:'ready',records:results.flatMap(x=>x.records).sort((a,b)=>b.created_at.localeCompare(a.created_at)),requests:results.map(x=>x.info)});
+ }catch(error){
+  if(sequence!==historyHTTP.sequence)return;
+  Object.assign(historyHTTP,backupFailure(error,historyHTTP.path),{records:[],requests:[]});
+ }
+ render();
+}
+function sessionHistory(scope){
+ return devices.filter(d=>scope==='all'||d.id===scope).flatMap(d=>localSnapshots(d.id).map(b=>({...b,device:d})));
+}
+function backupHistoryBody(scope){
+ if(historyHTTP.scope!==scope||historyHTTP.status==='loading'||historyHTTP.status==='idle'){
+  return apiState({...historyHTTP,status:'loading'},'Loading backup history…','Fetching synthetic snapshot metadata over HTTP.','retry-backups');
+ }
+ if(historyHTTP.status!=='ready')return apiState(historyHTTP,historyHTTP.status==='not-found'?'Backup history not found':'Backup API unavailable',historyHTTP.error,'retry-backups');
+ const local=sessionHistory(scope);
+ return httpEvidence(historyHTTP.requests)+'<section class="card">'+
+  cardHead('HTTP backup history',historyHTTP.records.length+' synthetic snapshots · server fixture is read-only',demoTag())+
+  (historyHTTP.records.length?backupTable(historyHTTP.records):'<div class="empty-state"><h2>No HTTP snapshots</h2><p>The API returned an empty backup history for this device.</p>'+btn('Retry','retry-backups')+'</div>')+'</section>'+
+  '<section class="card session-snapshots">'+cardHead('Browser-memory snapshots',local.length+' local copies · never sent to or persisted by the API','<span class="tiny-tag">THIS TAB ONLY</span>')+
+  (local.length?backupTable(local):'<p class="session-note">Create demo backup makes a synthetic copy in this tab only. Reloading removes it. The HTTP backup history stays unchanged.</p>')+'</section>';
+}
+function comparisonHeading(route){
+ return header('Configuration comparison','See what changed. Understand what matters.','Synthetic snapshots fetched over HTTP; differences calculated in this browser.',btn('Review demo impact','risk','primary','data-device-id="'+route.device.id+'"','shield'));
+}
+async function loadComparison(route=routing()){
+ const sequence=++comparisonHTTP.sequence,id=route.query.get('device')||route.device.id;
+ Object.assign(comparisonHTTP,{status:'loading',records:[],requests:[],left:null,right:null,path:backupPath(id),httpStatus:null,meta:null});render();
+ try{
+  const history=await readHistory(id);
+  if(sequence!==comparisonHTTP.sequence)return;
+  const records=[...localSnapshots(id),...history.records];
+  Object.assign(comparisonHTTP,{records,requests:[history.info]});
+  if(!records.length){Object.assign(comparisonHTTP,{status:'empty'});render();return;}
+  const leftId=route.query.get('left')||records[1]?.id||records[0].id;
+  const rightId=route.query.get('right')||records[0].id;
+  const selected=await Promise.all([leftId,rightId].map(async backupId=>{
+   const local=localSnapshots(id).find(b=>b.id===backupId);
+   return local?{record:local,info:null}:readSnapshot(id,backupId);
+  }));
+  if(sequence!==comparisonHTTP.sequence)return;
+  Object.assign(comparisonHTTP,{status:'ready',left:selected[0].record,right:selected[1].record,
+   requests:[history.info,...selected.map(x=>x.info).filter(Boolean)]});
+ }catch(error){
+  if(sequence!==comparisonHTTP.sequence)return;
+  Object.assign(comparisonHTTP,backupFailure(error,comparisonHTTP.path),{left:null,right:null});
+ }
+ render();
+}
+async function showSnapshot(id,backupId){
+ const sequence=++snapshotSequence;
+ const local=localSnapshots(id).find(b=>b.id===backupId);
+ modal('Synthetic snapshot',local?'<p>Browser-memory copy · not persisted by the API.</p><pre class="config-view">'+esc(local.config)+'</pre>':
+  apiState({status:'loading',path:backupPath(id)+'/'+encodeURIComponent(backupId)},'Loading snapshot…','Fetching synthetic configuration text over HTTP.','retry-snapshot'));
+ if(local)return;
+ try{
+  const result=await readSnapshot(id,backupId);
+  if(sequence!==snapshotSequence)return;
+  modal(result.record.label+' · HTTP snapshot',apiSource(result.info)+'<p>DEMO / UNVERIFIED · Entirely synthetic configuration. Read-only HTTP response.</p><pre class="config-view">'+esc(result.record.config)+'</pre>');
+ }catch(error){
+  if(sequence!==snapshotSequence)return;
+  const info=backupFailure(error,backupPath(id)+'/'+encodeURIComponent(backupId));
+  modal('Synthetic snapshot unavailable',apiState(info,info.status==='not-found'?'Snapshot not found':'Snapshot API unavailable',info.error,'retry-snapshot'));
+  const retry=document.querySelector('[data-action="retry-snapshot"]');
+  if(retry){retry.dataset.deviceId=id;retry.dataset.backupId=backupId;}
+ }
+}
 function enterRoute(){
  const route=routing();
- if(route.view==='devices'){if(route.detail)void loadDevice(route.requestedDeviceId);else void loadInventory();}
+ if(route.view==='devices'){
+  if(route.detail){void loadDevice(route.requestedDeviceId);if(state.detailTab==='backups')void loadBackupHistory(route.requestedDeviceId);}
+  else void loadInventory();
+ }else if(route.view==='backups')void loadBackupHistory(route.query.get('device')||'all');
+ else if(route.view==='compare')void loadComparison(route);
  else render();
 }
 
 const date=(value)=>new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value));
 const time=(value)=>new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}).format(new Date(value))+' UTC';
 const findDevice=id=>devices.find(d=>d.id===id)||devices[0];
-const allBackups=()=>devices.flatMap(d=>d.backups.map(b=>({...b,device:d}))).sort((a,b)=>b.created_at.localeCompare(a.created_at));
+const allBackups=()=>devices.flatMap(d=>[...localSnapshots(d.id),...d.backups].map(b=>({...b,device:d}))).sort((a,b)=>b.created_at.localeCompare(a.created_at));
 const findingKey=(d,f)=>d.id+':'+f.id;
 const pendingDevices=()=>devices.filter(d=>d.findings.some(f=>!state.reviewed.has(findingKey(d,f))));
 const badge=(value,label)=>'<span class="badge '+esc(value)+'"><i></i>'+esc(label||({high:'High impact',medium:'Medium impact',low:'Low · demo',unknown:'Unknown',healthy:'Healthy',reviewed:'Demo reviewed'}[value]||value))+'</span>';
@@ -146,10 +273,14 @@ function go(view,params={}){
  location.hash='/'+view+(query?'?'+query:'');
 }
 function compareTo(d,rightId,leftId){
- const right=d.backups.find(b=>b.id===rightId)||d.backups[0];
- const index=d.backups.indexOf(right);
- const left=d.backups.find(b=>b.id===leftId)||d.backups[index+1]||d.backups.at(-1);
- go('compare',{device:d.id,left:left.id,right:right.id});
+ // Explicit row selections travel as IDs; contents are loaded by loadComparison().
+ const records=[...localSnapshots(d.id),...(historyHTTP.status==='ready'?historyHTTP.records.filter(b=>b.device_id===d.id):[])];
+ const right=records.find(b=>b.id===rightId);
+ const index=records.indexOf(right);
+ const left=records.find(b=>b.id===leftId)||(right?records[index+1]||records.at(-1):null);
+ const target=new URLSearchParams({device:d.id,...(rightId?{right:rightId}:{}),...(left?{left:left.id}:{})}).toString();
+ if(location.hash==='/compare?'+target)void loadComparison();
+ else go('compare',Object.fromEntries(new URLSearchParams(target)));
 }
 function stats(){
  const pending=pendingDevices().length;
@@ -210,14 +341,17 @@ function backupTable(rows){
 }
 function backupsPage(route){
  const selected=route.query.get('device')||'all';
- const rows=allBackups().filter(b=>selected==='all'||b.device.id===selected);
- return header('Configuration backups','A little history. A clearer picture.','Browse synthetic snapshots. Creating a demo backup only changes this browser session.',btn('Create demo backup','create-backup','primary','data-device-id="'+(selected==='all'?state.selectedDevice:selected)+'"','plus'))+'<div class="filterbar"><select data-control="backups-device" aria-label="Filter backups by device"><option value="all">All devices</option>'+devices.map(d=>'<option value="'+d.id+'" '+(d.id===selected?'selected':'')+'>'+esc(d.display_name)+'</option>').join('')+'</select><span class="filter-summary">'+rows.length+' demo snapshots</span></div><section class="card">'+backupTable(rows)+'</section>';
+ return header('Configuration backups','A little history. A clearer picture.','Read-only synthetic history from HTTP. Local demo copies stay in this browser.',
+  btn('Refresh history','retry-backups','default','','activity')+btn('Create demo backup','create-backup','primary','data-device-id="'+(selected==='all'?state.selectedDevice:selected)+'"','plus'))+
+  '<div class="filterbar"><select data-control="backups-device" aria-label="Filter backups by device"><option value="all">All devices</option>'+
+  devices.map(d=>'<option value="'+d.id+'" '+(d.id===selected?'selected':'')+'>'+esc(d.display_name)+'</option>').join('')+
+  '</select><span class="filter-summary">DEMO / UNVERIFIED · no server writes</span></div>'+backupHistoryBody(selected);
 }
 function deviceDetail(d){
  const facts=[['Hostname',d.hostname],['Management address',d.management_ip],['Site',d.site],['Platform',d.model],['Software version',d.version],['Serial number',d.serial],['Connection','Disabled · no live access'],['Data source','Synthetic DEMO fixture']];
  let body;
  if(state.detailTab==='configuration')body='<section class="card">'+cardHead('Latest sample configuration','Synthetic text, safely rendered. No credentials.',demoTag())+'<pre class="config-view">'+esc(d.backups[0]?.config||'No synthetic configuration snapshot is available.')+'</pre></section>';
- else if(state.detailTab==='backups')body='<section class="card">'+cardHead('Backup history',d.backups.length+' synthetic snapshots',btn('Create demo backup','create-backup','soft','data-device-id="'+d.id+'"','plus'))+backupTable(d.backups.map(b=>({...b,device:d})))+'</section>';
+ else if(state.detailTab==='backups')body='<div class="backup-actions">'+btn('Refresh history','retry-backups','default','','activity')+btn('Create demo backup','create-backup','soft','data-device-id="'+d.id+'"','plus')+'</div>'+backupHistoryBody(d.id);
  else body='<section class="detail-grid"><article class="card">'+cardHead('Device profile','A sample record aligned with the inventory API.',demoTag())+'<div class="facts-grid">'+facts.map(([label,value])=>'<div><span class="fact-label">'+esc(label)+'</span><span class="fact-value">'+esc(value)+'</span></div>').join('')+'</div><div class="detail-note">'+icon('lock')+'Live connections, credentials, and configuration writes are disabled.</div></article><article class="card">'+cardHead('Configuration timeline','Three points of reference. One clear story.')+'<div class="priority-list">'+d.backups.slice(0,3).map((b,i)=>'<button class="priority-item" data-action="compare" data-device-id="'+d.id+'" data-right="'+b.id+'"><span class="device-glyph">'+icon('archive')+'</span><span><strong>'+esc(b.label)+(i===0?' · latest':'')+'</strong><p>'+date(b.created_at)+' · '+time(b.created_at)+'</p><span class="small muted">Synthetic running configuration</span></span>'+icon('chevron')+'</button>').join('')+'</div><div class="priority-card-footer">'+icon('shield')+d.findings.length+' prewritten demo findings · '+badge(d.risk)+'</div></article></section>';
  return'<a class="back-link" href="#/devices">'+icon('arrow')+'Back to device inventory</a><section class="page-heading"><div class="device-heading">'+glyph(d)+'<div><div class="eyebrow">'+esc(d.site)+' / DEMO DEVICE</div><h1>'+esc(d.display_name)+'</h1><p>'+esc(d.management_ip)+' &nbsp;·&nbsp; '+esc(d.model)+' &nbsp;·&nbsp; '+badge(d.risk)+'</p></div></div><div class="heading-actions"><button class="btn" disabled title="Live device access is disabled in this demo">'+icon('lock')+'Connect to device</button>'+btn('Compare snapshots','compare','primary','data-device-id="'+d.id+'"','diff')+'</div></section>'+apiSource(deviceHTTP)+'<nav class="detail-tabs" aria-label="Device detail tabs">'+['overview','configuration','backups','risk'].map(t=>'<button class="'+(state.detailTab===t?'active':'')+'" data-action="detail-tab" data-tab="'+t+'" data-device-id="'+d.id+'">'+({overview:'Overview',configuration:'Configuration',backups:'Backup history',risk:'Risk review'}[t])+'</button>').join('')+'</nav>'+body;
 }
@@ -241,14 +375,17 @@ function diffLines(left,right){
 }
 function comparePage(route){
  const d=route.device;
- const left=d.backups.find(b=>b.id===route.query.get('left'))||d.backups[1]||d.backups[0];
- const right=d.backups.find(b=>b.id===route.query.get('right'))||d.backups[0];
+ const heading=comparisonHeading(route);
+ if(comparisonHTTP.status==='loading'||comparisonHTTP.status==='idle')return heading+apiState({...comparisonHTTP,status:'loading'},'Loading comparison…','Fetching history and the selected synthetic snapshots over HTTP.','retry-compare');
+ if(comparisonHTTP.status==='empty')return heading+httpEvidence(comparisonHTTP.requests)+'<section class="card empty-state"><h2>No snapshots to compare</h2><p>This device has no synthetic backup history.</p>'+btn('Retry','retry-compare')+'</section>';
+ if(comparisonHTTP.status!=='ready')return heading+apiState(comparisonHTTP,comparisonHTTP.status==='not-found'?'Snapshot not found':'Comparison API unavailable',comparisonHTTP.error,'retry-compare')+'<a class="back-link" href="#/backups">Choose a snapshot from backup history</a>';
+ const left=comparisonHTTP.left,right=comparisonHTTP.right;
  const diff=diffLines(left.config,right.config);
- const options=selected=>d.backups.map(b=>'<option value="'+b.id+'" '+(b.id===selected.id?'selected':'')+'>'+esc(b.label)+' · '+date(b.created_at)+'</option>').join('');
+ const options=selected=>comparisonHTTP.records.map(b=>'<option value="'+esc(b.id)+'" '+(b.id===selected.id?'selected':'')+'>'+esc(b.label)+(b.browser_memory?' · BROWSER MEMORY':' · HTTP')+' · '+date(b.created_at)+'</option>').join('');
  let lines='';
  if(state.layout==='split')lines=diff.rows.filter(r=>!state.onlyChanges||r.kind!=='same').map(r=>'<div class="diff-row"><div class="diff-cell '+(r.left===undefined?'blank':r.kind==='changed'?'removed':'')+'"><span class="line-no">'+(r.ln||'')+'</span><span class="line-sign">'+(r.left!==undefined&&r.kind==='changed'?'−':'')+'</span>'+esc(r.left??'')+'</div><div class="diff-cell '+(r.right===undefined?'blank':r.kind==='changed'?'added':'')+'"><span class="line-no">'+(r.rn||'')+'</span><span class="line-sign">'+(r.right!==undefined&&r.kind==='changed'?'+':'')+'</span>'+esc(r.right??'')+'</div></div>').join('');
  else lines=diff.ops.filter(r=>!state.onlyChanges||r.kind!=='same').map(r=>'<div class="unified-row '+r.kind+'"><span class="line-no">'+(r.ln||r.rn||'')+'</span><span class="line-sign">'+(r.kind==='removed'?'−':r.kind==='added'?'+':' ')+'</span>'+esc(r.left??r.right)+'</div>').join('');
- return header('Configuration comparison','See what changed. Understand what matters.','Compare synthetic snapshots side by side. No real device configuration is loaded.',btn('Review demo impact','risk','primary','data-device-id="'+d.id+'"','shield'))+'<div class="demo-callout">'+icon('help')+'DEMO · All configuration text is synthetic. Highlighted changes are calculated from these sample snapshots, not a live device.</div><section class="card"><div class="compare-toolbar"><div class="select-group"><label for="compare-device">Device</label><select id="compare-device" data-control="compare-device">'+devices.map(x=>'<option value="'+x.id+'" '+(x.id===d.id?'selected':'')+'>'+esc(x.display_name)+'</option>').join('')+'</select></div><div class="select-group"><label for="compare-left">Before snapshot</label><select id="compare-left" data-control="compare-version">'+options(left)+'</select></div><button class="btn swap" data-action="swap" aria-label="Swap snapshots">'+icon('swap')+'</button><div class="select-group"><label for="compare-right">After snapshot</label><select id="compare-right" data-control="compare-version">'+options(right)+'</select></div></div><div class="diff-heading"><div class="diff-summary"><span class="added-count">+'+diff.added+' added</span><span class="removed-count">−'+diff.removed+' removed</span><span>'+esc(d.display_name)+'</span></div><div class="diff-heading-right"><label class="checkbox-label"><input type="checkbox" id="changes-only" '+(state.onlyChanges?'checked':'')+'>Changes only</label><div class="segmented" aria-label="Comparison layout"><button data-action="layout" data-layout="split" class="'+(state.layout==='split'?'active':'')+'">Side by side</button><button data-action="layout" data-layout="unified" class="'+(state.layout==='unified'?'active':'')+'">Unified</button></div></div></div>'+(state.layout==='split'?'<div class="diff-pane-head"><span>'+esc(left.label)+' · BEFORE</span><span>'+esc(right.label)+' · AFTER</span></div>':'')+'<div class="diff-content" aria-label="Configuration difference">'+(lines||'<div class="empty-state">These snapshots are identical. Turn off Changes only to see context.</div>')+'</div><div class="comparison-foot"><span>'+icon('lock')+'Read-only comparison · Nothing is applied to a device</span>'+demoTag()+'</div></section>';
+ return heading+httpEvidence(comparisonHTTP.requests)+([left,right].some(b=>b.browser_memory)?'<div class="demo-callout">'+icon('archive')+'This comparison includes a browser-memory copy. It was not fetched from or persisted by the API.</div>':'')+'<div class="demo-callout">'+icon('help')+'DEMO · All configuration text is synthetic. Highlighted changes are calculated from these sample snapshots, not a live device.</div><section class="card"><div class="compare-toolbar"><div class="select-group"><label for="compare-device">Device</label><select id="compare-device" data-control="compare-device">'+devices.map(x=>'<option value="'+x.id+'" '+(x.id===d.id?'selected':'')+'>'+esc(x.display_name)+'</option>').join('')+'</select></div><div class="select-group"><label for="compare-left">Before snapshot</label><select id="compare-left" data-control="compare-version">'+options(left)+'</select></div><button class="btn swap" data-action="swap" aria-label="Swap snapshots">'+icon('swap')+'</button><div class="select-group"><label for="compare-right">After snapshot</label><select id="compare-right" data-control="compare-version">'+options(right)+'</select></div></div><div class="diff-heading"><div class="diff-summary"><span class="added-count">+'+diff.added+' added</span><span class="removed-count">−'+diff.removed+' removed</span><span>'+esc(d.display_name)+'</span></div><div class="diff-heading-right"><label class="checkbox-label"><input type="checkbox" id="changes-only" '+(state.onlyChanges?'checked':'')+'>Changes only</label><div class="segmented" aria-label="Comparison layout"><button data-action="layout" data-layout="split" class="'+(state.layout==='split'?'active':'')+'">Side by side</button><button data-action="layout" data-layout="unified" class="'+(state.layout==='unified'?'active':'')+'">Unified</button></div></div></div>'+(state.layout==='split'?'<div class="diff-pane-head"><span>'+esc(left.label)+' · BEFORE</span><span>'+esc(right.label)+' · AFTER</span></div>':'')+'<div class="diff-content" aria-label="Configuration difference">'+(lines||'<div class="empty-state">These snapshots are identical. Turn off Changes only to see context.</div>')+'</div><div class="comparison-foot"><span>'+icon('lock')+'Read-only comparison · Nothing is applied to a device</span>'+demoTag()+'</div></section>';
 }
 function riskPage(route){
  const selected=route.query.get('device')||'all';
@@ -271,7 +408,7 @@ function render(){
  document.querySelector('#breadcrumb').textContent=route.detail?(deviceHTTP.status==='ready'&&deviceHTTP.id===route.requestedDeviceId?deviceHTTP.record.display_name:'Device details'):({overview:'Overview',devices:'Device inventory',backups:'Configuration backups',compare:'Compare configurations',risk:'Risk reviews'}[route.view]);
  document.querySelector('#review-count').textContent=pendingDevices().length;
  document.querySelector('.nav-count').textContent=devices.length;
- main.setAttribute('aria-busy',String(route.view==='devices'&&(route.detail?deviceHTTP.status==='loading':inventoryHTTP.status==='loading')));
+ main.setAttribute('aria-busy',String((route.view==='devices'&&(route.detail?deviceHTTP.status==='loading'||state.detailTab==='backups'&&historyHTTP.status==='loading':inventoryHTTP.status==='loading'))||route.view==='backups'&&historyHTTP.status==='loading'||route.view==='compare'&&comparisonHTTP.status==='loading'));
  main.innerHTML=route.detail?inventoryDevicePage(route):({overview:overview,devices:inventory,backups:()=>backupsPage(route),compare:()=>comparePage(route),risk:()=>riskPage(route)}[route.view])();
  iconize();
  if(focus){const next=document.getElementById(focus.id);if(next){next.focus({preventScroll:true});if(typeof focus.start==='number'&&next.setSelectionRange)try{next.setSelectionRange(focus.start,focus.end);}catch{}}}
@@ -280,9 +417,9 @@ function render(){
 let toastTimer;
 function toast(message){const el=document.querySelector('#toast');el.textContent=message;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),4200);}
 let modalFocus;
-function closeModal(){document.querySelector('#modal-root').innerHTML='';modalFocus?.focus?.({preventScroll:true});}
+function closeModal(){snapshotSequence++;document.querySelector('#modal-root').innerHTML='';modalFocus?.focus?.({preventScroll:true});}
 function modal(title,body){
- modalFocus=document.activeElement;
+ if(!document.querySelector('#modal-root [role="dialog"]'))modalFocus=document.activeElement;
  document.querySelector('#modal-root').innerHTML='<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">'+esc(title)+'</h2><button id="modal-close" class="icon-button" data-action="close-modal" aria-label="Close dialog">'+icon('close')+'</button></div>'+body+'</section></div>';
  document.querySelector('#modal-close').focus();
 }
@@ -294,18 +431,27 @@ document.addEventListener('click',event=>{
   if(name==='inventory')go('devices');
   if(name==='retry-inventory')void loadInventory();
   if(name==='retry-device')void loadDevice(routing().requestedDeviceId);
-  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory and device profiles use a real local HTTP Mock API with synthetic DEMO records. Other views retain demo fixtures. No authenticated backend, credentials, SSH, databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
+  if(name==='retry-backups'){const route=routing();void loadBackupHistory(route.detail?route.requestedDeviceId:route.query.get('device')||'all');}
+  if(name==='retry-compare')void loadComparison();
+  if(name==='retry-snapshot')void showSnapshot(action.dataset.deviceId,action.dataset.backupId);
+  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory, backup history and selected comparison snapshots use a real local HTTP Mock API with synthetic DEMO records. Dashboard and risk views retain fixtures; local snapshot copies stay in browser memory. No authenticated backend, credentials, SSH, databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
   if(name==='activity')modal('Demo activity','<p>A sample activity stream. These are fictional events.</p>'+allBackups().slice(0,4).map(b=>'<div class="activity-modal-row">'+icon('archive')+' '+esc(b.device.display_name)+' · '+esc(b.label)+'<small>'+date(b.created_at)+' · '+time(b.created_at)+' · '+esc(b.origin)+'</small></div>').join(''));
   if(name==='close-modal')closeModal();
   if(name==='chart'){state.chartDays=Number(action.dataset.days);render();}
   if(name==='layout'){state.layout=action.dataset.layout;render();}
   if(name==='reset-filters'){state.search='';state.site='all';state.inventoryRisk='all';state.riskImpact='all';document.querySelector('#global-search').value='';render();}
-  if(name==='detail-tab'){if(action.dataset.tab==='risk'){go('risk',{device:d.id});}else{state.detailTab=action.dataset.tab;render();}}
+  if(name==='detail-tab'){if(action.dataset.tab==='risk'){go('risk',{device:d.id});}else{state.detailTab=action.dataset.tab;if(state.detailTab==='backups')void loadBackupHistory(d.id);else render();}}
   if(name==='compare')compareTo(d,action.dataset.right);
   if(name==='risk')go('risk',{device:d.id});
   if(name==='swap'){const l=document.querySelector('#compare-left').value,r=document.querySelector('#compare-right').value;go('compare',{device:d.id,left:r,right:l});}
-  if(name==='snapshot'){const b=d.backups.find(x=>x.id===action.dataset.backupId);modal(d.display_name+' · '+b.label,'<p>Entirely synthetic. No live configuration or credentials.</p><pre class="config-view">'+esc(b.config)+'</pre>');}
-  if(name==='create-backup'){d.backups.unshift({id:d.id+'-demo-'+Date.now(),label:'Demo snapshot '+String(d.backups.length+1).padStart(2,'0'),created_at:new Date().toISOString(),config_type:'running',origin:'This browser only',config:d.backups[0].config});render();toast('Demo snapshot created in memory. No device was contacted.');}
+  if(name==='snapshot')void showSnapshot(d.id,action.dataset.backupId);
+  if(name==='create-backup'){
+   const local=localSnapshots(d.id);
+   memorySnapshots.set(d.id,[{id:d.id+'-demo-'+Date.now(),device_id:d.id,source:'SYNTHETIC_DEMO',synthetic:true,browser_memory:true,
+    label:'Local demo copy '+String(local.length+1).padStart(2,'0'),created_at:new Date().toISOString(),config_type:'running',
+    origin:'Browser memory · NOT persisted',config:d.backups[0].config},...local]);
+   render();toast('Synthetic copy created in this tab only. No API write; reload discards it.');
+  }
   if(name==='review-finding'){const k=d.id+':'+action.dataset.findingId;if(state.reviewed.has(k))state.reviewed.delete(k);else state.reviewed.add(k);render();toast('Demo review updated in this browser only. No approval was created.');}
   if(name==='review-all'){const chosen=action.dataset.deviceId==='all'?devices:[d];chosen.forEach(x=>x.findings.forEach(f=>state.reviewed.add(findingKey(x,f))));render();toast('Sample findings marked reviewed. No real change was approved.');}
   if(name==='export'){if(inventoryHTTP.status!=='ready')return toast('Load the mock inventory before exporting.');const blob=new Blob([JSON.stringify({mode:'SYNTHETIC_DEMO',source:'Local Mock API',devices:inventoryHTTP.records},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='aegis-synthetic-device-inventory.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Exported synthetic inventory only.');}
