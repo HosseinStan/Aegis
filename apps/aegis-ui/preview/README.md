@@ -1,73 +1,77 @@
-# Standalone Aegis MVP preview
+# Aegis local MVP preview
 
 **DEMO — SYNTHETIC DATA — UNVERIFIED RISK FINDINGS**
 
-An isolated, zero-dependency browser preview of the Aegis workflow. It is a lightweight fallback, **not the final Vue implementation**. Vue/Vite migration is deferred until dependencies are available. The existing [Vue integration architecture](../../../docs/vue-integration.md) remains the intended integration path.
+Inventory and device profiles now use the existing Go API, native authentication/RBAC, DeviceService and SQLite repository. Backup history and comparison keep their Node synthetic HTTP API. Dashboard and risk review remain fixture demonstrations. This zero-dependency Node/HTML preview is not the final Vue implementation; the [Vue architecture](../../../docs/vue-integration.md) remains the intended frontend direction.
 
-## Run locally
+## Run the isolated Go-backed preview
 
-Use an existing Node.js installation. No package installation, environment variables, credentials, or database setup is required.
+Use an already verified **Go 1.26.10** installation and existing Node.js. Do not launch cmd/server: that production entrypoint registers Cisco SSH connectors.
 
-```sh
-cd apps/aegis-ui/preview
-node server.mjs
-```
+Work in a separate development clone. Choose an absolute external DemoRoot outside Git for the binary, caches and disposable runs. In the build process only, select the verified GOROOT and set:
 
-Open the loopback URL printed by the process. The server binds only to `127.0.0.1` on an available port; the current URL and PID are written to the ignored `runtime.json`. Stop this foreground process with Ctrl+C.
+- GOTOOLCHAIN=local, GOENV=off, GOWORK=off, GOPROXY=off.
+- GOMODCACHE to a private copy of already available dependencies verified against go.sum. No downloads or module upgrades are required.
+- GOCACHE and GOTMPDIR to fresh locations under DemoRoot.
+- CGO_ENABLED=0. The existing SQLite driver is pure Go.
 
-An optional `node server.mjs --port=4318` selects a fixed loopback port, useful for a controlled stop/restart and Retry check. The default remains an available port; the bind address cannot be changed.
+Build from apps/aegis-api, using the verified executable explicitly:
 
-## Inventory HTTP Mock API
+    <verified-go-root>/bin/go build -mod=readonly -trimpath -o <DemoRoot>/aegis-inventory-demo.exe ./cmd/inventory-demo
 
-- `GET /api/mock/v1/devices` returns the synthetic Inventory collection.
-- `GET /api/mock/v1/devices/:id` returns a synthetic device profile, or JSON `404 DEVICE_NOT_FOUND`.
-- Responses use `{data, meta}` with `source: "Local Mock API"`, `synthetic: true`, and a fresh response request ID. API errors use `{error, meta}`. Only GET is accepted.
-- The server projects device metadata from the existing reviewed fixture. It does not return configuration text, backups or risk findings through these endpoints.
+Then run from any directory, replacing the absolute paths:
 
-Inventory, its filters/export, and device-profile facts use browser `fetch` requests to these endpoints. A visible **Local Mock API** indicator shows the actual HTTP status, request URL, elapsed time and response request ID. Refresh and Retry issue new requests; failed requests never fall back to the static Inventory collection.
+    node <clone>/apps/aegis-ui/preview/run-go-demo.mjs --go-binary=<DemoRoot>/aegis-inventory-demo.exe --run-parent=<DemoRoot>/disposable
 
-Loading, empty collection, no search matches, device-not-found and API-error states are explicit. To inspect the unavailable state, stop only this local preview process while leaving the loaded Inventory tab open and press Refresh inventory. Restart it on the same port, then press Retry.
+On non-Windows systems the binary may be named aegis-inventory-demo. An optional --port=4318 fixes only the preview port. Both servers bind to 127.0.0.1; no bind-address override exists.
 
-## Backup and snapshot HTTP Mock API
+The supervisor prints only non-secret Go/preview URLs and a sanitized authentication result. Open the preview URL with #/devices. The ignored runtime.json holds the preview URL/PID, never credentials. The supervisor accepts these local terminal commands:
 
-- GET /api/mock/v1/devices/:id/backups returns synthetic snapshot metadata, without configuration text.
-- GET /api/mock/v1/devices/:id/backups/:backupId returns the selected synthetic snapshot including its configuration text.
-- Both follow the same response envelope, GET-only policy and request-ID headers as Inventory. Every backup carries device_id, source SYNTHETIC_DEMO and synthetic true. Configuration text must carry the reviewed synthetic banner.
-- Unknown devices return JSON 404 DEVICE_NOT_FOUND; unknown or cross-device snapshot IDs return 404 BACKUP_NOT_FOUND.
+- **stop-api:** stop only its Go child; the browser preview and Node backup API stay running.
+- **start-api:** create a fresh disposable SQLite database and identity session; then press Retry in the browser.
+- **quit** or Ctrl+C: stop this supervisor and its Go child.
 
-Backup History fetches metadata over HTTP. All-devices history combines the 12 per-device responses; a device filter fetches just that device's history. View fetches a snapshot through its endpoint. Device-detail Backup history uses the same HTTP path.
+Each Go start creates a new aegis-inventory-demo-* directory under the external parent. It never accepts a database DSN or opens an existing database. Disposable directories are retained on shutdown; the supervisor never cleans, restores or automatically reruns them.
 
-Configuration Compare first fetches history for the version selectors, then fetches both selected HTTP snapshots. The existing browser-side line-diff algorithm calculates additions/removals. Side-by-side, Unified, Changes only, selectors and Swap remain available. Source details expose the actual GET paths and response request IDs.
+Running server.mjs alone still serves the synthetic backup/comparison experience, but Go Inventory explicitly shows unavailable. It never substitutes the Node Inventory fixture.
 
-History, snapshot viewing and comparison show loading, empty, 404 and API-error states with Retry. Failed reads do not substitute static configuration text. To inspect an unavailable state, leave the page loaded, stop only its preview process, then press Refresh history or change a comparison selector. Restart on the same loopback port and press Retry. A missing snapshot can be inspected with #/compare?device=core-sw-01&left=missing&right=core-sw-01-v3.
+## Real Go Inventory flow
 
-**Create demo backup is separate:** it copies synthetic fixture text into this tab's memory. These copies appear under Browser-memory snapshots and are labeled NOT persisted. They can be viewed/compared locally, with explicit BROWSER MEMORY version labels. They never issue an API write or change HTTP history; reloading discards them. Dashboard and risk review remain fixture demonstrations. The device's Configuration tab retains its labeled sample fixture text.
+    Browser GET /api/go/v1/devices
+      -> same-origin Node adapter
+      -> native Go POST /api/v1/auth/login (ephemeral viewer, server-held)
+      -> native Go GET /api/v1/devices?limit=100
+      -> Authenticate / Require(devices.read)
+      -> DeviceService / SQLite repository / disposable database
 
-## Explore
+Device details use /api/go/v1/devices/:id -> /api/v1/devices/:id.
 
-- **Overview:** dashboard, 7/30-day backup chart, clickable sample topology.
-- **Device inventory:** HTTP-fetched records; search names, addresses, sites and models; filter by site or impact.
-- **Device details:** HTTP-fetched profile and backup history, with sample configuration and risk-review navigation.
-- **Configuration backups:** 36 initial HTTP snapshots plus a separate browser-memory copy section.
-- **Compare configurations:** HTTP-fetched snapshot text, device/version selectors, side-by-side and unified line differences, changes-only filtering and snapshot swapping.
-- **Risk reviews:** prewritten sample findings, impact filters, expandable explanations and in-memory demo review tracking. UNKNOWN is distinct from LOW.
+The dedicated cmd/inventory-demo entrypoint registers ONLY internal/connectors/mock. It does not import Cisco SSH, load production config/.env, construct configuration/backup services, or accept device-operation routes. Four disabled records use documentation-range addresses and stable demo IDs. Native Go records are returned by existing services; the adapter only projects presentation fields.
 
-All 12 device records, configurations, topology and findings are synthetic. Addresses use documentation ranges. Configuration differences are calculated from the fixture text; risk findings are **not** generated by a verified risk engine or API. Demo review actions create no authorization or audit record. Reloading resets in-memory snapshots and reviews.
+A viewer is created with the existing password hashing, JWT and role implementation. Random bootstrap credentials travel through an anonymous stdin pipe, never argv, environment, logs or public files. A fresh random JWT signing key stays in Go process memory. Tokens stay in the Node process, never browser storage, responses or source. Native unauthenticated Inventory requests still return 401.
 
-No actual SSH, device operation, authenticated Aegis backend API, production database or configuration write is enabled. The connection button is deliberately disabled. The local HTTP Mock API is real HTTP communication with synthetic data; authenticated backend integration remains future work.
+The existing schema requires a device credential FK. Bootstrap inserts one **inert reference with no username/password/private-key/enabled-secret blobs**, not a usable device credential. No credential store is instantiated and no connector operation is invoked. This preserves the existing schema and business code without handling device credentials.
 
-## Validation and status
+The development entrypoint exposes only health, login/me and Inventory list/profile routes. The browser adapter exposes only Inventory GETs; all writes, configuration reads, discovery, credential APIs and other native operations are blocked. Its upstream is the loopback child started by the supervisor, with a required isolated-demo response marker.
 
-The source can be checked without a build:
+Inventory shows **Aegis Go API — Isolated Demo**, actual GET paths/status and the native Go request ID. Model/software/serial facts absent from the Inventory contract are labeled Not supplied; risk is Unknown / not assessed. No fixture profile fields are presented as Go results. Loading, empty/no-match, 404, unavailable and Retry states remain explicit.
 
-```sh
-node --check server.mjs
-node --check public/app.js
-```
+## Synthetic flows retained
 
-Browser smoke checks cover the core navigation, search/detail flow, backup history, interactive configuration comparison and demo risk review. These checks are not security, capacity or release acceptance.
+- GET /api/mock/v1/devices/:id/backups: synthetic metadata without configuration text.
+- GET /api/mock/v1/devices/:id/backups/:backupId: selected synthetic configuration text.
+- These retain the Local Mock API source, synthetic markers and request IDs. The original mock device endpoints remain available for fixture demonstrations, but Inventory never calls them.
+- Backup History has 36 initial snapshots across 12 fixture devices. Device filtering, View and device-detail Backup history use these HTTP endpoints.
+- Compare fetches selected Node snapshots; the unchanged client-side line-diff algorithm supports Side-by-side, Unified, Changes only, selectors and Swap.
+- Create demo backup is separate browser-memory state, explicitly NOT persisted. It does not write to either API or database.
+- Dashboard counts/topology, the labeled sample Configuration tab and prewritten risk findings remain synthetic. Reviewing a finding does not create authorization or security acceptance.
 
-Phase E is **DEFERRED / NOT ACCEPTED**. Historical E1 Go cases passed their executed scenarios, but Controller acceptance failed. Production release remains **BLOCKED**. Phase F and Task #7 gain no acceptance or authorization. This draft does not authorize merge or deployment.
+## Minimal validation and limits
 
-Known CI blocker, reported in the independent review: govulncheck identifies **GO-2026-6809** in **Go 1.26.9**, with a fix available in **Go 1.26.10**. Record this for a separate focused toolchain fix. This MVP change does not alter CI, disable the scanner or upgrade a toolchain.
+Node syntax checks, a build of only cmd/inventory-demo, HTTP smoke checks, browser Inventory/detail interaction, unauthorized reads, and a controlled Go stop/start with Retry cover this milestone. These are not Phase E, race, capacity, performance or release validation.
 
+No real SSH, external device addresses, credential handling, production database, discovery or configuration changes are enabled.
+
+Known CI issue reported by independent review: **GO-2026-6809** in **Go 1.26.9**, fixed in **Go 1.26.10**. The local demo uses the verified 1.26.10 toolchain. Repository-wide go.mod/CI/Docker correction remains a separate task; this change does not alter those files or disable govulncheck.
+
+**Phase E: DEFERRED / NOT ACCEPTED. Production release: BLOCKED.** Historical E1 Go cases passed their executed scenarios, but Controller acceptance failed. No merge/deployment, Phase F or Task #7 acceptance is granted.

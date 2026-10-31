@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import {createGoInventoryBridge,GO_SOURCE} from './go-inventory-bridge.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.join(root, 'public');
 const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/styles.css':'styles.css','/demo-data.json':'demo-data.json','/favicon.svg':'favicon.svg'};
@@ -22,11 +23,7 @@ const mockBackups = new Map(fixture.devices.map(device => [device.id, device.bac
   }
   return {...backup,device_id:device.id,source:'SYNTHETIC_DEMO',synthetic:true};
 })]));
-const args = process.argv.slice(2);
-if (args.length > 1 || (args.length && !/^--port=\d+$/.test(args[0]))) {
-  throw new Error('Usage: node server.mjs [--port=0..65535]');
-}
-const port = args.length ? Number(args[0].slice(7)) : 0;
+export async function startPreview({port=0,goInventory=createGoInventoryBridge()}={}){
 if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid localhost port.');
 const server = http.createServer(async (req,res)=>{
   res.setHeader('Cache-Control','no-store');
@@ -34,6 +31,9 @@ const server = http.createServer(async (req,res)=>{
   res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
   if(!/^((127\.0\.0\.1)|(localhost)):\d+$/.test(req.headers.host||'')){res.writeHead(403);return res.end('Local preview only');}
   const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
+  if(pathname==='/api/go/v1/devices'||pathname.startsWith('/api/go/v1/devices/')){
+    return goInventory.handle(req,res,pathname);
+  }
   if (pathname === '/api/mock/v1/devices' || pathname.startsWith('/api/mock/v1/devices/')) {
     const meta = {source:'Local Mock API',mode:'DEMO',synthetic:true,request_id:randomUUID()};
     const json = (status, body) => {
@@ -63,16 +63,26 @@ const server = http.createServer(async (req,res)=>{
     return json(200,{data:device});
   }
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405,{'Allow':'GET, HEAD'});return res.end('Preview is read-only');}
-  if(pathname === '/healthz'){res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({status:'ok',mode:'synthetic-demo',liveDeviceAccess:false,realApiConnected:false}));}
+  if(pathname === '/healthz'){res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({status:'ok',mode:'synthetic-demo',liveDeviceAccess:false,productionApiConnected:false,inventorySource:GO_SOURCE,goApiConfigured:goInventory.configured()}));}
   const name=files[pathname];
   if(!name){res.writeHead(404);return res.end('Not found');}
   try{const body=await readFile(path.join(publicRoot,name));res.writeHead(200,{'Content-Type':types[path.extname(name)]});res.end(req.method==='HEAD'?undefined:body);}
   catch{res.writeHead(500);res.end('Preview asset unavailable');}
 });
-server.listen(port,'127.0.0.1',async()=>{
- const {port}=server.address();
- const info={url:'http://127.0.0.1:'+port,pid:process.pid,host:'127.0.0.1',port,mode:'DEMO',startedAt:new Date().toISOString()};
- await writeFile(path.join(root,'runtime.json'),JSON.stringify(info,null,2));
- console.log(info.url);
+await new Promise((resolve,reject)=>{
+ server.once('error',reject);
+ server.listen(port,'127.0.0.1',resolve);
 });
-server.on('error',error=>{console.error(error.message);process.exitCode=1;});
+const boundPort=server.address().port;
+const info={url:'http://127.0.0.1:'+boundPort,pid:process.pid,host:'127.0.0.1',port:boundPort,mode:'DEMO',inventorySource:'Aegis Go API — Isolated Demo',startedAt:new Date().toISOString()};
+try{await writeFile(path.join(root,'runtime.json'),JSON.stringify(info,null,2));}
+catch(error){server.close();throw error;}
+return {server,info};
+}
+
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+ const args=process.argv.slice(2);
+ if(args.length>1||(args.length&&!/^--port=\d+$/.test(args[0])))throw new Error('Usage: node server.mjs [--port=0..65535]');
+ const {info}=await startPreview({port:args.length?Number(args[0].slice(7)):0});
+ console.log(info.url);
+}

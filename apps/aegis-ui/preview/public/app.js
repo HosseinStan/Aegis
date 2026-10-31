@@ -35,13 +35,14 @@ const state={search:'',site:'all',inventoryRisk:'all',selectedDevice:devices[0].
 const main=document.querySelector('#main');
 
 // HTTP views never fall back to fixture records. Dashboard/risk remain fixture demos.
-const inventoryHTTP={status:'idle',records:[],path:'/api/mock/v1/devices',httpStatus:null,meta:null,elapsed:0,error:null,sequence:0};
+const GO_SOURCE='Aegis Go API — Isolated Demo';
+const inventoryHTTP={status:'idle',records:[],path:'/api/go/v1/devices',httpStatus:null,meta:null,elapsed:0,error:null,sequence:0};
 const deviceHTTP={status:'idle',id:null,record:null,path:null,httpStatus:null,meta:null,elapsed:0,error:null,sequence:0};
 function isInventoryRecord(record){
- return record && record.source==='SYNTHETIC_DEMO' &&
+ return record && record.source==='AEGIS_GO_ISOLATED_DEMO' &&
   ['id','display_name','hostname','management_ip','site','model','role','status','risk'].every(key=>typeof record[key]==='string'&&record[key].length>0);
 }
-async function requestMockAPI(url){
+async function requestMockAPI(url,expectedSource='Local Mock API'){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
  const started=performance.now();
  try{
@@ -49,8 +50,8 @@ async function requestMockAPI(url){
   let payload;
   try{payload=await response.json();}catch{throw Object.assign(new Error('The mock API returned an unreadable response.'),{httpStatus:response.status});}
   if(!response.ok)throw Object.assign(new Error(payload.error?.message||'The mock API could not complete this request.'),{httpStatus:response.status,meta:payload.meta});
-  if(payload.meta?.synthetic!==true||payload.meta?.source!=='Local Mock API'||typeof payload.meta?.request_id!=='string'){
-   throw Object.assign(new Error('The response did not identify itself as the synthetic Local Mock API.'),{httpStatus:response.status});
+  if(payload.meta?.synthetic!==true||payload.meta?.source!==expectedSource||typeof payload.meta?.request_id!=='string'){
+   throw Object.assign(new Error('The response did not identify itself as the expected synthetic demo API.'),{httpStatus:response.status});
   }
   return{payload,httpStatus:response.status,elapsed:Math.round(performance.now()-started)};
  }finally{clearTimeout(timer);}
@@ -59,37 +60,38 @@ async function loadInventory(){
  const sequence=++inventoryHTTP.sequence;
  Object.assign(inventoryHTTP,{status:'loading',records:[],error:null,httpStatus:null,meta:null});render();
  try{
-  const result=await requestMockAPI(inventoryHTTP.path);
+  const result=await requestMockAPI(inventoryHTTP.path,GO_SOURCE);
   if(sequence!==inventoryHTTP.sequence)return;
   if(!Array.isArray(result.payload.data)||!result.payload.data.every(isInventoryRecord)||
-      new Set(result.payload.data.map(d=>d.id)).size!==result.payload.data.length)throw new Error('The mock inventory response has an invalid device list.');
+      new Set(result.payload.data.map(d=>d.id)).size!==result.payload.data.length)throw new Error('The Go demo inventory response has an invalid device list.');
   Object.assign(inventoryHTTP,{status:'ready',records:result.payload.data,httpStatus:result.httpStatus,meta:result.payload.meta,elapsed:result.elapsed});
  }catch(error){
   if(sequence!==inventoryHTTP.sequence)return;
   Object.assign(inventoryHTTP,{status:'error',records:[],httpStatus:error.httpStatus||null,meta:error.meta||null,
-   error:error.httpStatus?error.message:'Could not reach the Local Mock API. Make sure the local preview server is running, then try again.'});
+   error:error.httpStatus?error.message:'Could not reach the isolated Aegis Go API. Make sure the local preview server is running, then try again.'});
  }
  render();
 }
 async function loadDevice(id){
  const sequence=++deviceHTTP.sequence;
- Object.assign(deviceHTTP,{status:'loading',id,record:null,path:'/api/mock/v1/devices/'+encodeURIComponent(id),error:null,httpStatus:null,meta:null});render();
+ Object.assign(deviceHTTP,{status:'loading',id,record:null,path:'/api/go/v1/devices/'+encodeURIComponent(id),error:null,httpStatus:null,meta:null});render();
  try{
-  const result=await requestMockAPI(deviceHTTP.path);
+  const result=await requestMockAPI(deviceHTTP.path,GO_SOURCE);
   if(sequence!==deviceHTTP.sequence)return;
-  if(!isInventoryRecord(result.payload.data)||result.payload.data.id!==id)throw new Error('The mock API returned an unexpected device record.');
+  if(!isInventoryRecord(result.payload.data)||result.payload.data.id!==id)throw new Error('The Go API returned an unexpected device record.');
   Object.assign(deviceHTTP,{status:'ready',record:result.payload.data,httpStatus:result.httpStatus,meta:result.payload.meta,elapsed:result.elapsed});
  }catch(error){
   if(sequence!==deviceHTTP.sequence)return;
   Object.assign(deviceHTTP,{status:error.httpStatus===404?'not-found':'error',record:null,httpStatus:error.httpStatus||null,meta:error.meta||null,
-   error:error.httpStatus?error.message:'Could not load this device from the Local Mock API. Check the local preview server and try again.'});
+   error:error.httpStatus?error.message:'Could not load this device from the isolated Aegis Go API. Check the local preview server and try again.'});
  }
  render();
 }
 function apiSource(info){
  const ready=info.status==='ready',loading=info.status==='loading';
+ const source=info.path?.startsWith('/api/go/')?GO_SOURCE:'Local Mock API';
  const status=loading?'Request in progress':info.httpStatus?'HTTP '+info.httpStatus:'Connection unavailable';
- return'<div class="api-source '+(ready?'api-ready':loading?'api-pending':'api-failed')+'" data-api-path="'+esc(info.path)+'" data-http-status="'+(info.httpStatus||'')+'"><div class="api-source-label">'+icon('server')+'<strong>Local Mock API</strong><span class="api-status">'+esc(status)+'</span></div><div class="api-source-detail"><a href="'+esc(info.path)+'" target="_blank" rel="noopener">GET '+esc(info.path)+'</a>'+(ready?'<span>'+info.elapsed+' ms · synthetic response</span>':'')+'</div>'+(info.meta?.request_id?'<details class="api-request-id"><summary>HTTP request details</summary><span>Response request ID: <code>'+esc(info.meta.request_id)+'</code></span></details>':'')+'</div>';
+ return'<div class="api-source '+(ready?'api-ready':loading?'api-pending':'api-failed')+'" data-api-path="'+esc(info.path)+'" data-http-status="'+(info.httpStatus||'')+'"><div class="api-source-label">'+icon('server')+'<strong>'+esc(source)+'</strong><span class="api-status">'+esc(status)+'</span></div><div class="api-source-detail"><a href="'+esc(info.path)+'" target="_blank" rel="noopener">GET '+esc(info.path)+'</a>'+(ready?'<span>'+info.elapsed+' ms · synthetic response</span>':'')+(info.meta?.upstream_path?'<span>Go GET '+esc(info.meta.upstream_path)+' · disposable SQLite · ephemeral viewer</span>':'')+'</div>'+(info.meta?.request_id?'<details class="api-request-id"><summary>HTTP request details</summary><span>Response request ID: <code>'+esc(info.meta.request_id)+'</code></span></details>':'')+'</div>';
 }
 function apiState(info,title,description,retryAction){
  const loading=info.status==='loading';
@@ -99,10 +101,10 @@ function apiState(info,title,description,retryAction){
 }
 function inventoryDevicePage(route){
  if(deviceHTTP.status==='loading'||deviceHTTP.id!==route.requestedDeviceId){
-  return header('Device inventory','Loading device details…','Reading this synthetic device over HTTP.')+apiState(deviceHTTP,'Fetching device record','Contacting the Local Mock API.','retry-device');
+  return header('Device inventory','Loading device details…','Reading the isolated Go API and disposable demo database over HTTP.')+apiState(deviceHTTP,'Fetching device record','Contacting the isolated Aegis Go API.','retry-device');
  }
  if(deviceHTTP.status==='not-found'){
-  return'<a class="back-link" href="#/devices">'+icon('arrow')+'Back to device inventory</a>'+header('Device inventory','Device not found','No synthetic device matches “'+deviceHTTP.id+'”.')+apiState(deviceHTTP,'This device is not in the mock inventory',deviceHTTP.error,'retry-device');
+  return'<a class="back-link" href="#/devices">'+icon('arrow')+'Back to device inventory</a>'+header('Device inventory','Device not found','No synthetic device matches “'+deviceHTTP.id+'”.')+apiState(deviceHTTP,'This device is not in the isolated Go inventory',deviceHTTP.error,'retry-device');
  }
  if(deviceHTTP.status!=='ready'){
   return'<a class="back-link" href="#/devices">'+icon('arrow')+'Back to device inventory</a>'+header('Device inventory','Device details unavailable','The device record could not be loaded over HTTP.')+apiState(deviceHTTP,'Could not load device details',deviceHTTP.error||'Please try again.','retry-device');
@@ -325,15 +327,15 @@ function overview(){
  return header('A little clarity. A lot of confidence.','Your network. In focus.','Explore your devices, understand changes, and make room for better decisions.','<span class="muted small">Sample · 28 Oct 2026</span>'+btn('View inventory','inventory','primary','','arrow'))+stats()+'<section class="dashboard-grid">'+chart()+topology()+'</section><section class="dashboard-grid"><article class="card table-card">'+cardHead('Recent configuration changes','A synthetic change queue, ready to explore.',demoTag())+'<div class="table-scroll">'+table+'</div></article><article class="card">'+cardHead('Needs a closer look',pending.length+' demo devices in the review queue','<a href="#/risk" class="text-link">View all '+icon('arrow')+'</a>')+'<div class="priority-list">'+(priority||'<div class="empty-state">All demo findings reviewed.</div>')+'</div><div class="priority-card-footer">'+icon('help')+'Sample findings, not a real security assessment.</div></article></section><div class="card activity-strip"><span>'+icon('archive')+'Latest demo snapshot · '+esc(devices[0].display_name)+'</span><span>'+icon('lock')+'Live device connections disabled</span><button class="text-link" data-action="activity">View demo activity '+icon('arrow')+'</button></div>';
 }
 function inventory(){
- const heading=header('Device inventory','A home for every device.','Explore synthetic records delivered over HTTP from your local mock API.',btn('Refresh inventory','retry-inventory','primary','','activity')+btn('Export demo JSON','export','default',inventoryHTTP.status==='ready'?'':'disabled','download'));
- if(inventoryHTTP.status==='loading'||inventoryHTTP.status==='idle')return heading+apiState(inventoryHTTP,'Loading inventory…','Fetching synthetic devices from the Local Mock API.','retry-inventory');
- if(inventoryHTTP.status==='error')return heading+apiState(inventoryHTTP,'Inventory API unavailable',inventoryHTTP.error,'retry-inventory');
+ const heading=header('Device inventory','A home for every device.','Synthetic records from the real Go API and disposable SQLite. Live access disabled; risk is not assessed.',btn('Refresh inventory','retry-inventory','primary','','activity')+btn('Export demo JSON','export','default',inventoryHTTP.status==='ready'?'':'disabled','download'));
+ if(inventoryHTTP.status==='loading'||inventoryHTTP.status==='idle')return heading+apiState(inventoryHTTP,'Loading inventory…','Fetching synthetic devices from the isolated Aegis Go API.','retry-inventory');
+ if(inventoryHTTP.status==='error')return heading+apiState(inventoryHTTP,'Go Inventory API unavailable',inventoryHTTP.error,'retry-inventory');
  const inventoryRecords=inventoryHTTP.records;
- if(!inventoryRecords.length)return heading+apiState(inventoryHTTP,'No devices in the mock inventory','The API returned an empty device collection. Refresh to check again.','retry-inventory');
+ if(!inventoryRecords.length)return heading+apiState(inventoryHTTP,'No devices in the Go demo inventory','The Go API returned an empty device collection. Refresh to check again.','retry-inventory');
  const q=state.search.trim().toLowerCase();
  const rows=inventoryRecords.filter(d=>(!q||[d.display_name,d.management_ip,d.site,d.model,d.role].join(' ').toLowerCase().includes(q))&&(state.site==='all'||d.site===state.site)&&(state.inventoryRisk==='all'||d.risk===state.inventoryRisk));
  return heading+apiSource(inventoryHTTP)+
- '<div class="filterbar"><label class="search-field">'+icon('search')+'<input id="inventory-search" placeholder="Search name, address, site, or model…" aria-label="Search device inventory" value="'+esc(state.search)+'"></label><select id="site-filter" aria-label="Filter by site" data-control="site"><option value="all">All sites</option>'+[...new Set(inventoryRecords.map(d=>d.site))].map(s=>'<option '+(state.site===s?'selected':'')+'>'+esc(s)+'</option>').join('')+'</select><select aria-label="Filter by impact" data-control="inventory-risk"><option value="all">All impact levels</option>'+['high','medium','unknown','low'].map(v=>'<option value="'+v+'" '+(state.inventoryRisk===v?'selected':'')+'>'+v[0].toUpperCase()+v.slice(1)+'</option>').join('')+'</select><span class="filter-summary">'+rows.length+' of '+inventoryRecords.length+' devices · DEMO</span></div><section class="card">'+(rows.length?'<div class="table-scroll"><table aria-label="Device inventory"><thead><tr><th>Device</th><th>Management address</th><th>Site</th><th>Demo status</th><th>Potential impact</th><th></th></tr></thead><tbody>'+rows.map(d=>'<tr data-device="'+d.id+'" tabindex="0" aria-label="Open '+d.display_name+'"><td>'+deviceLabel(d)+'</td><td><span class="mono">'+esc(d.management_ip)+'</span><div class="card-subtitle">'+esc(d.model)+'</div></td><td>'+esc(d.site)+'</td><td>'+badge(d.status==='Healthy'?'healthy':d.risk,d.status)+'</td><td>'+badge(d.risk)+'</td><td class="arrow-cell">'+icon('chevron')+'</td></tr>').join('')+'</tbody></table></div>':empty('No matching devices','Try another name, address, site or impact filter.'))+'</section>';
+ '<div class="filterbar"><label class="search-field">'+icon('search')+'<input id="inventory-search" placeholder="Search name, address, or device group…" aria-label="Search device inventory" value="'+esc(state.search)+'"></label><select id="site-filter" aria-label="Filter by device group" data-control="site"><option value="all">All device groups</option>'+[...new Set(inventoryRecords.map(d=>d.site))].map(s=>'<option '+(state.site===s?'selected':'')+'>'+esc(s)+'</option>').join('')+'</select><select aria-label="Filter by impact" data-control="inventory-risk"><option value="all">All impact levels</option>'+['high','medium','unknown','low'].map(v=>'<option value="'+v+'" '+(state.inventoryRisk===v?'selected':'')+'>'+v[0].toUpperCase()+v.slice(1)+'</option>').join('')+'</select><span class="filter-summary">'+rows.length+' of '+inventoryRecords.length+' devices · DEMO</span></div><section class="card">'+(rows.length?'<div class="table-scroll"><table aria-label="Device inventory"><thead><tr><th>Device</th><th>Management address</th><th>Device group</th><th>Demo status</th><th>Potential impact</th><th></th></tr></thead><tbody>'+rows.map(d=>'<tr data-device="'+d.id+'" tabindex="0" aria-label="Open '+d.display_name+'"><td>'+deviceLabel(d)+'</td><td><span class="mono">'+esc(d.management_ip)+'</span><div class="card-subtitle">'+esc(d.model)+'</div></td><td>'+esc(d.site)+'</td><td>'+badge(d.status==='Healthy'?'healthy':d.risk,d.status)+'</td><td>'+badge(d.risk)+'</td><td class="arrow-cell">'+icon('chevron')+'</td></tr>').join('')+'</tbody></table></div>':empty('No matching devices','Try another name, address, device group or impact filter.'))+'</section>';
 }
 function backupTable(rows){
  if(!rows.length)return empty('No demo snapshots','Try selecting another sample device.');
@@ -348,11 +350,11 @@ function backupsPage(route){
   '</select><span class="filter-summary">DEMO / UNVERIFIED · no server writes</span></div>'+backupHistoryBody(selected);
 }
 function deviceDetail(d){
- const facts=[['Hostname',d.hostname],['Management address',d.management_ip],['Site',d.site],['Platform',d.model],['Software version',d.version],['Serial number',d.serial],['Connection','Disabled · no live access'],['Data source','Synthetic DEMO fixture']];
+ const facts=[['Hostname',d.hostname],['Management address',d.management_ip],['Device group',d.device_group],['Platform',d.platform],['Software version',d.version],['Serial number',d.serial],['Connection','Disabled · no live access'],['Data source',GO_SOURCE],['Vendor / protocol',d.vendor+' / '+d.protocol],['Device operations','Disabled · demo record']];
  let body;
- if(state.detailTab==='configuration')body='<section class="card">'+cardHead('Latest sample configuration','Synthetic text, safely rendered. No credentials.',demoTag())+'<pre class="config-view">'+esc(d.backups[0]?.config||'No synthetic configuration snapshot is available.')+'</pre></section>';
+ if(state.detailTab==='configuration')body='<section class="card">'+cardHead('Node DEMO configuration · separate from Go','Static synthetic fixture text. Go configuration reads are not connected.',demoTag())+'<pre class="config-view">'+esc(d.backups[0]?.config||'No synthetic configuration snapshot is available.')+'</pre></section>';
  else if(state.detailTab==='backups')body='<div class="backup-actions">'+btn('Refresh history','retry-backups','default','','activity')+btn('Create demo backup','create-backup','soft','data-device-id="'+d.id+'"','plus')+'</div>'+backupHistoryBody(d.id);
- else body='<section class="detail-grid"><article class="card">'+cardHead('Device profile','A sample record aligned with the inventory API.',demoTag())+'<div class="facts-grid">'+facts.map(([label,value])=>'<div><span class="fact-label">'+esc(label)+'</span><span class="fact-value">'+esc(value)+'</span></div>').join('')+'</div><div class="detail-note">'+icon('lock')+'Live connections, credentials, and configuration writes are disabled.</div></article><article class="card">'+cardHead('Configuration timeline','Three points of reference. One clear story.')+'<div class="priority-list">'+d.backups.slice(0,3).map((b,i)=>'<button class="priority-item" data-action="compare" data-device-id="'+d.id+'" data-right="'+b.id+'"><span class="device-glyph">'+icon('archive')+'</span><span><strong>'+esc(b.label)+(i===0?' · latest':'')+'</strong><p>'+date(b.created_at)+' · '+time(b.created_at)+'</p><span class="small muted">Synthetic running configuration</span></span>'+icon('chevron')+'</button>').join('')+'</div><div class="priority-card-footer">'+icon('shield')+d.findings.length+' prewritten demo findings · '+badge(d.risk)+'</div></article></section>';
+ else body='<section class="detail-grid"><article class="card">'+cardHead('Device profile','A sample record aligned with the inventory API.',demoTag())+'<div class="facts-grid">'+facts.map(([label,value])=>'<div><span class="fact-label">'+esc(label)+'</span><span class="fact-value">'+esc(value)+'</span></div>').join('')+'</div><div class="detail-note">'+icon('lock')+'Live connections, credentials, and configuration writes are disabled.</div></article><article class="card">'+cardHead('Demo configuration timeline','Separate Node synthetic backup flow · not backed by Go.')+'<div class="priority-list">'+d.backups.slice(0,3).map((b,i)=>'<button class="priority-item" data-action="compare" data-device-id="'+d.id+'" data-right="'+b.id+'"><span class="device-glyph">'+icon('archive')+'</span><span><strong>'+esc(b.label)+(i===0?' · latest':'')+'</strong><p>'+date(b.created_at)+' · '+time(b.created_at)+'</p><span class="small muted">Synthetic running configuration</span></span>'+icon('chevron')+'</button>').join('')+'</div><div class="priority-card-footer">'+icon('shield')+d.findings.length+' prewritten demo findings · '+badge(d.risk)+'</div></article></section>';
  return'<a class="back-link" href="#/devices">'+icon('arrow')+'Back to device inventory</a><section class="page-heading"><div class="device-heading">'+glyph(d)+'<div><div class="eyebrow">'+esc(d.site)+' / DEMO DEVICE</div><h1>'+esc(d.display_name)+'</h1><p>'+esc(d.management_ip)+' &nbsp;·&nbsp; '+esc(d.model)+' &nbsp;·&nbsp; '+badge(d.risk)+'</p></div></div><div class="heading-actions"><button class="btn" disabled title="Live device access is disabled in this demo">'+icon('lock')+'Connect to device</button>'+btn('Compare snapshots','compare','primary','data-device-id="'+d.id+'"','diff')+'</div></section>'+apiSource(deviceHTTP)+'<nav class="detail-tabs" aria-label="Device detail tabs">'+['overview','configuration','backups','risk'].map(t=>'<button class="'+(state.detailTab===t?'active':'')+'" data-action="detail-tab" data-tab="'+t+'" data-device-id="'+d.id+'">'+({overview:'Overview',configuration:'Configuration',backups:'Backup history',risk:'Risk review'}[t])+'</button>').join('')+'</nav>'+body;
 }
 function diffLines(left,right){
@@ -407,7 +409,7 @@ function render(){
  document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===route.view));
  document.querySelector('#breadcrumb').textContent=route.detail?(deviceHTTP.status==='ready'&&deviceHTTP.id===route.requestedDeviceId?deviceHTTP.record.display_name:'Device details'):({overview:'Overview',devices:'Device inventory',backups:'Configuration backups',compare:'Compare configurations',risk:'Risk reviews'}[route.view]);
  document.querySelector('#review-count').textContent=pendingDevices().length;
- document.querySelector('.nav-count').textContent=devices.length;
+ document.querySelector('.nav-count').textContent=inventoryHTTP.status==='ready'?inventoryHTTP.records.length:'—';
  main.setAttribute('aria-busy',String((route.view==='devices'&&(route.detail?deviceHTTP.status==='loading'||state.detailTab==='backups'&&historyHTTP.status==='loading':inventoryHTTP.status==='loading'))||route.view==='backups'&&historyHTTP.status==='loading'||route.view==='compare'&&comparisonHTTP.status==='loading'));
  main.innerHTML=route.detail?inventoryDevicePage(route):({overview:overview,devices:inventory,backups:()=>backupsPage(route),compare:()=>comparePage(route),risk:()=>riskPage(route)}[route.view])();
  iconize();
@@ -434,7 +436,7 @@ document.addEventListener('click',event=>{
   if(name==='retry-backups'){const route=routing();void loadBackupHistory(route.detail?route.requestedDeviceId:route.query.get('device')||'all');}
   if(name==='retry-compare')void loadComparison();
   if(name==='retry-snapshot')void showSnapshot(action.dataset.deviceId,action.dataset.backupId);
-  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory, backup history and selected comparison snapshots use a real local HTTP Mock API with synthetic DEMO records. Dashboard and risk views retain fixtures; local snapshot copies stay in browser memory. No authenticated backend, credentials, SSH, databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
+  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory and device profiles use the existing Aegis Go API, native authentication/RBAC and a disposable SQLite database through a same-origin adapter. Backup history and comparison remain on the Node synthetic HTTP API. Dashboard and risk views retain fixtures; local snapshot copies stay in browser memory. No production backend, device credentials, SSH, production databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
   if(name==='activity')modal('Demo activity','<p>A sample activity stream. These are fictional events.</p>'+allBackups().slice(0,4).map(b=>'<div class="activity-modal-row">'+icon('archive')+' '+esc(b.device.display_name)+' · '+esc(b.label)+'<small>'+date(b.created_at)+' · '+time(b.created_at)+' · '+esc(b.origin)+'</small></div>').join(''));
   if(name==='close-modal')closeModal();
   if(name==='chart'){state.chartDays=Number(action.dataset.days);render();}
@@ -454,7 +456,7 @@ document.addEventListener('click',event=>{
   }
   if(name==='review-finding'){const k=d.id+':'+action.dataset.findingId;if(state.reviewed.has(k))state.reviewed.delete(k);else state.reviewed.add(k);render();toast('Demo review updated in this browser only. No approval was created.');}
   if(name==='review-all'){const chosen=action.dataset.deviceId==='all'?devices:[d];chosen.forEach(x=>x.findings.forEach(f=>state.reviewed.add(findingKey(x,f))));render();toast('Sample findings marked reviewed. No real change was approved.');}
-  if(name==='export'){if(inventoryHTTP.status!=='ready')return toast('Load the mock inventory before exporting.');const blob=new Blob([JSON.stringify({mode:'SYNTHETIC_DEMO',source:'Local Mock API',devices:inventoryHTTP.records},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='aegis-synthetic-device-inventory.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Exported synthetic inventory only.');}
+  if(name==='export'){if(inventoryHTTP.status!=='ready')return toast('Load the Go demo inventory before exporting.');const blob=new Blob([JSON.stringify({mode:'SYNTHETIC_DEMO',source:GO_SOURCE,devices:inventoryHTTP.records},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='aegis-synthetic-device-inventory.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Exported synthetic inventory only.');}
   return;
  }
  const link=event.target.closest('[data-route]');
