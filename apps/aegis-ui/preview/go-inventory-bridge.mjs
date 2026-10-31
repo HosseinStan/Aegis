@@ -83,24 +83,33 @@ export function createGoInventoryBridge(){
   return {authentication:'verified',identity:'ephemeral viewer + demo backup reader',devicesRead:true,backupsRead:true,deviceWrites:false,backupWrites:false};
  }
  async function handle(req,res,pathname){
-  const match=new RegExp('^'+prefix+'(?:/([a-zA-Z0-9-]+)(?:/(backups)(?:/([a-zA-Z0-9-]+))?)?)?$').exec(pathname);
-  const backups=Boolean(match?.[2]),id=match?.[1]||null,backupID=match?.[3]||null;
+  const match=new RegExp('^'+prefix+'(?:/([a-zA-Z0-9-]+)(?:/(backups)(?:/([a-zA-Z0-9-]+)(?:/diff/([a-zA-Z0-9-]+))?)?)?)?$').exec(pathname);
+  const backups=Boolean(match?.[2]),id=match?.[1]||null,backupID=match?.[3]||null,rightID=match?.[4]||null;
   let meta={source:backups?GO_BACKUP_SOURCE:GO_SOURCE,mode:'DEMO',synthetic:true,request_id:randomUUID(),storage:backups?'disposable SQLite metadata + synthetic snapshot files':'disposable SQLite'};
   const json=(status,body)=>{
    res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','X-Aegis-Data-Source':backups?'aegis-go-disposable-sqlite-demo':'aegis-go-isolated-demo',
     'X-Request-ID':meta.request_id,...(status===405?{Allow:'GET'}:{})});
    res.end(JSON.stringify({...body,meta}));
   };
-  if(req.method!=='GET')return json(405,{error:{code:'READ_ONLY_DEMO',message:'This adapter supports Inventory and backup List/Content GET requests only.'}});
-  if(!match)return json(404,{error:{code:'ENDPOINT_NOT_FOUND',message:'Only Inventory and backup List/Content reads are connected to Go.'}});
+  if(req.method!=='GET')return json(405,{error:{code:'READ_ONLY_DEMO',message:'This adapter supports Inventory and backup List/Content/Diff GET requests only.'}});
+  if(!match)return json(404,{error:{code:'ENDPOINT_NOT_FOUND',message:'Only Inventory and backup List/Content/Diff reads are connected to Go.'}});
   if(!target)return json(503,{error:{code:'GO_API_UNAVAILABLE',message:'The isolated Go API is unavailable. Start it, then Retry. No Node fixture fallback is used.'}});
-  const path='/api/v1/devices'+(id?'/'+id:'')+(backups?'/backups'+(backupID?'/'+backupID:'?limit=100'):id?'':'?limit=100');
+  const path='/api/v1/devices'+(id?'/'+id:'')+(backups?'/backups'+(backupID?'/'+backupID+(rightID?'/diff/'+rightID:''):'?limit=100'):id?'':'?limit=100');
   try{
    const {response,payload}=await authenticated(path);
    const requestID=payload.meta?.request_id||payload.error?.request_id;
    if(typeof requestID!=='string'||requestID!==response.headers.get('x-request-id'))throw new Error('Missing Go request identity');
    meta={...meta,request_id:requestID,upstream_path:path,...(payload.meta?.pagination?{pagination:payload.meta.pagination}:{})};
    if(!response.ok)return json(response.status,{error:{code:payload.error?.code||'GO_API_ERROR',message:payload.error?.message||'The Go API could not complete this request.'}});
+   if(rightID){
+    const diff=payload.data;
+    if(!diff||diff.left_backup_id!==backupID||diff.right_backup_id!==rightID||typeof diff.changed!=='boolean'||
+       !Number.isSafeInteger(diff.added_lines)||diff.added_lines<0||!Number.isSafeInteger(diff.removed_lines)||diff.removed_lines<0||
+       typeof diff.diff!=='string')throw new Error('Unexpected native Go Diff response');
+    // Preserve the native unified string and counts; no diff is calculated here.
+    return json(200,{data:{left_backup_id:diff.left_backup_id,right_backup_id:diff.right_backup_id,
+     changed:diff.changed,added_lines:diff.added_lines,removed_lines:diff.removed_lines,diff:diff.diff,source:'AEGIS_GO_DIFF_DEMO'}});
+   }
    const records=backups?(backupID?presentBackup(payload.data?.backup,id,payload.data?.config):
     Array.isArray(payload.data)?payload.data.map(record=>presentBackup(record,id)):null):
     id?present(payload.data):Array.isArray(payload.data)?payload.data.map(present):null;

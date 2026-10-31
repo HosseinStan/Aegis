@@ -20,3 +20,35 @@
 .session-note{padding:0 24px 22px;color:var(--muted);font-size:13px;line-height:1.8}
 .api-request-id .api-source-detail{margin-top:12px;flex-wrap:wrap}
 .api-request-id code{overflow-wrap:anywhere}
+.go-comparison{min-width:0}
+.go-comparison .api-source{min-width:0}
+.go-comparison .api-source-detail{min-width:0;max-width:100%;flex-wrap:wrap;margin-left:0}
+.go-comparison .api-source-detail a,.go-comparison .api-request-id code{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.go-comparison .compare-toolbar{display:grid;grid-template-columns:minmax(130px,.9fr) minmax(150px,1fr) auto minmax(150px,1fr)}
+.go-comparison .select-group{min-width:0;max-width:100%}
+.go-comparison select{min-width:0;width:100%;max-width:100%;text-overflow:ellipsis}
+.go-comparison .diff-heading{gap:12px;flex-wrap:wrap}
+.go-comparison .diff-row{min-width:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.go-comparison .diff-cell{min-width:0;display:grid;grid-template-columns:25px 13px minmax(0,1fr);align-content:start;white-space:normal;padding-right:8px}
+.go-comparison .line-no{min-width:0;width:auto;padding:0 4px}
+.go-comparison .line-sign{min-width:0;width:auto}
+.go-comparison .line-text{min-width:0;font:inherit;white-space:pre-wrap;overflow-wrap:anywhere}
+.go-comparison .diff-pane-head span{min-width:0;overflow-wrap:anywhere}
+.native-unified{margin:0;padding:16px;max-height:560px;overflow:auto;font:11px/1.8 "Cascadia Code",Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:#52674b}
+.unified-caption{padding:12px 16px;border-bottom:1px solid var(--border);font-size:10px;color:var(--muted)}
+.comparison-selection{padding:14px 18px;border-top:1px solid var(--border);font-size:10px;color:var(--muted)}
+.comparison-selection summary{cursor:pointer}
+.comparison-selection code{overflow-wrap:anywhere}
+.no-change-note{display:flex;gap:8px;align-items:center;padding:15px 18px;background:#f3f8ed;color:#527242;font-size:12px}
+@media(max-width:1100px){
+ .go-comparison .compare-toolbar{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px}
+ .go-comparison .compare-device-group{grid-column:1/-1}
+ .go-comparison .swap{transform:none}
+ .go-comparison select{padding:9px 7px;font-size:10px}
+}
+@media(max-width:700px){
+ .go-comparison .diff-heading-right{gap:10px;flex-wrap:wrap}
+ .go-comparison .diff-cell{grid-template-columns:19px 10px minmax(0,1fr);padding-right:4px;font-size:9px}
+ .go-comparison .diff-pane-head{font-size:9px}
+ .native-unified{font-size:10px;padding:12px}
+}

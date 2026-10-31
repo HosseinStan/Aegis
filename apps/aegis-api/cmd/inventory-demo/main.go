@@ -136,7 +136,7 @@ func run() error {
 	}
 	ranges := []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24"), netip.MustParsePrefix("198.51.100.0/24"), netip.MustParsePrefix("203.0.113.0/24")}
 	backupRoot := filepath.Join(runDir, "synthetic-snapshots")
-	// ConfigService stays nil: only List and Content are reachable over HTTP.
+	// ConfigService stays nil: only List, Content and Diff are reachable over HTTP.
 	backupService, err := services.NewBackupService(store, nil, backupRoot, 64<<10)
 	if err != nil {
 		return err
@@ -168,10 +168,11 @@ func run() error {
 	router := api.Routes(handler, &observability.Metrics{}, api.RouterConfig{RequestTimeout: 10 * time.Second})
 	leaf := regexp.MustCompile("^/api/v1/devices/[a-zA-Z0-9-]+$")
 	backupRead := regexp.MustCompile("^/api/v1/devices/[a-zA-Z0-9-]+/backups(?:/[a-zA-Z0-9-]+)?$")
+	backupDiff := regexp.MustCompile("^/api/v1/devices/[a-zA-Z0-9-]+/backups/[a-zA-Z0-9-]+/diff/[a-zA-Z0-9-]+$")
 	restricted := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Aegis-Data-Source", "aegis-go-isolated-demo")
 		w.Header().Set("X-Aegis-Demo-Mode", "mock-inventory-v1")
-		if backupRead.MatchString(r.URL.Path) {
+		if backupRead.MatchString(r.URL.Path) || backupDiff.MatchString(r.URL.Path) {
 			w.Header().Set("X-Aegis-Data-Source", "aegis-go-disposable-sqlite-demo")
 		}
 		w.Header().Set("Cache-Control", "no-store")
@@ -180,10 +181,10 @@ func run() error {
 			http.Error(w, "Loopback demo only", http.StatusForbidden)
 			return
 		}
-		allowedGet := r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/api/v1/auth/me" || r.URL.Path == "/api/v1/devices" || leaf.MatchString(r.URL.Path) || backupRead.MatchString(r.URL.Path)
+		allowedGet := r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/api/v1/auth/me" || r.URL.Path == "/api/v1/devices" || leaf.MatchString(r.URL.Path) || backupRead.MatchString(r.URL.Path) || backupDiff.MatchString(r.URL.Path)
 		allowedLogin := r.Method == http.MethodPost && r.URL.Path == "/api/v1/auth/login"
 		if !(r.Method == http.MethodGet && allowedGet) && !allowedLogin {
-			http.Error(w, "This demo exposes Inventory and backup List/Content reads only", http.StatusNotFound)
+			http.Error(w, "This demo exposes Inventory and backup List/Content/Diff reads only", http.StatusNotFound)
 			return
 		}
 		router.ServeHTTP(w, r)
