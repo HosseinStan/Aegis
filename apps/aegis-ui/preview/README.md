@@ -8,6 +8,8 @@ Dashboard, Inventory, device profiles, Backup History, snapshot viewing and Conf
 
 Use an already verified **Go 1.26.10** installation and existing Node.js. Do not launch cmd/server: that production entrypoint registers Cisco SSH connectors.
 
+**Do not open public/index.html directly with file://.** Root-relative styles, JavaScript modules and the same-origin API require the HTTP server. Launch the existing Node/Go supervisor below and open its printed **http://127.0.0.1:<port>/** URL in the browser. No npm install or other dependency installation is required. If the stylesheet/server is missing, the HTML includes a plain launch reminder; it is hidden during normal HTTP use.
+
 Work in a separate development clone. Choose an absolute external DemoRoot outside Git for the binary, caches and disposable runs. In the build process only, select the verified GOROOT and set:
 
 - GOTOOLCHAIN=local, GOENV=off, GOWORK=off, GOPROXY=off.
@@ -55,6 +57,14 @@ Running server.mjs alone still serves the separate Risk Review fixture, but Dash
 
 Device details use /api/go/v1/devices/:id -> /api/v1/devices/:id.
 
+### Saved device Configuration tab
+
+- Open a Go device and choose Configuration, or use #/devices/:id?tab=configuration. The tab reads that device's existing backup history, filters persisted running-config snapshots and initially selects the newest timestamp. It then reads the selected content through the existing native BackupService.Content bridge path.
+- Timestamp, actual backup UUID, SHA-256, byte size and read-only synthetic content come from Go responses. The screen states **Latest saved configuration — not live device state.** Older selections are labeled Older saved version. No live configuration endpoint, connector or SSH is used.
+- The version selector contains only that Go device's saved running-config UUIDs. Compare opens the selected UUID and an adjacent saved version in the existing native Go comparison. Fixture configurations and browser-memory copies never join this list.
+- The URL preserves the selected UUID. Retry retains it, including after a Go restart; a stale UUID shows not-found instead of resolving to a replacement. **Refresh versions** explicitly discards the selection, reads the current list and selects its latest saved version. Empty, loading, authorization failure, 404 and unavailable states show no fallback content.
+- Go device profiles no longer merge fixture configuration or finding counts. Risk Review remains a separate, clearly labeled fixture screen. Configuration text wraps long lines within its own read-only panel at narrow widths.
+
 The dedicated cmd/inventory-demo entrypoint registers ONLY internal/connectors/mock. It does not import Cisco SSH, load production config/.env, construct ConfigService, or accept device-operation routes. Four disabled records use documentation-range addresses and stable demo IDs. Native Go records are returned by existing services; the adapter only projects presentation fields.
 
 A viewer is created with the existing password hashing, JWT and role implementation. Random bootstrap credentials travel through an anonymous stdin pipe, never argv, environment, logs or public files. A fresh random JWT signing key stays in Go process memory. Tokens stay in the Node process, never browser storage, responses or source. Native unauthenticated Inventory requests still return 401.
@@ -93,15 +103,15 @@ Inventory shows **Aegis Go API — Isolated Demo**, actual GET paths/status and 
 
 - GET /api/mock/v1/devices/:id/backups: synthetic metadata without configuration text.
 - GET /api/mock/v1/devices/:id/backups/:backupId: selected synthetic configuration text.
-- These retain the Local Mock API source, synthetic markers and request IDs as legacy material. Dashboard, Inventory, Backup History and Compare never use them as fallback.
+- These retain the Local Mock API source, synthetic markers and request IDs as legacy material. Dashboard, Inventory, device Configuration, Backup History and Compare never use them as fallback.
 - The active Compare screen uses Go snapshots only. Older independent demo workspaces retain their previous fixture comparison experience.
 - Browser-memory copies can still be viewed, but their Compare action is removed and they are explicitly excluded from Go comparison.
 - Create demo backup copies a legacy fixture only into browser memory, in a separate section labeled NOT persisted to Go or Node. It creates no HTTP backup, SQLite row or file. Reload discards it.
-- The sample Configuration tab and prewritten risk findings remain explicitly fixture-based. Risk Review is labeled **FIXTURE DEMO — UNVERIFIED — NOT LINKED TO GO DATA**. Reviewing a finding does not create authorization or security acceptance.
+- Prewritten risk findings remain fixture-based. Risk Review is labeled **FIXTURE DEMO — UNVERIFIED — NOT LINKED TO GO DATA**. Reviewing a finding does not create authorization or security acceptance. The device Configuration tab uses only saved Go snapshots.
 
 ## Minimal validation and limits
 
-For the Dashboard milestone, Node syntax checks, five existing HTTP reads, browser metric/link checks, desktop/narrow layouts and a controlled Go stop/start verify the visible flow. The unchanged, previously built Go 1.26.10 demo binary is reused; no backend build or dependency change is needed. Existing Inventory, Backup History, Content and native Diff remain usable. These checks are not Phase E, race, capacity, performance or release validation.
+For the saved-Configuration milestone, Node syntax checks, focused existing HTTP reads, version/content/metadata and Compare checks, desktop/narrow layouts and a controlled Go stop/start verify the visible flow. The unchanged, previously built Go 1.26.10 demo binary is reused; no backend build or dependency change is needed. Dashboard, Inventory, Backup History, Content and native Diff remain usable. These checks are not Phase E, race, capacity, performance or release validation.
 
 No real SSH, external device addresses, credential handling, production database, discovery or configuration changes are enabled.
 

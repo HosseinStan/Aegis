@@ -111,14 +111,14 @@ function inventoryDevicePage(route){
  if(deviceHTTP.status!=='ready'){
   return'<a class="back-link" href="#/devices">'+icon('arrow')+'Back to device inventory</a>'+header('Device inventory','Device details unavailable','The device record could not be loaded over HTTP.')+apiState(deviceHTTP,'Could not load device details',deviceHTTP.error||'Please try again.','retry-device');
  }
- const legacy=devices.find(d=>d.id===deviceHTTP.record.id);
- return deviceDetail({...deviceHTTP.record,backups:legacy?.backups||[],findings:legacy?.findings||[]});
+ return deviceDetail(deviceHTTP.record);
 }
 // Session-only snapshots are deliberately separate from immutable HTTP history.
 const memorySnapshots=new Map();
 const localSnapshots=id=>memorySnapshots.get(id)||[];
 const historyHTTP={status:'idle',scope:null,devices:[],records:[],requests:[],sequence:0};
 const comparisonHTTP={status:'idle',records:[],requests:[],left:null,right:null,sequence:0};
+const configurationHTTP={status:'idle',deviceId:null,selectedId:null,records:[],record:null,requests:[],sequence:0,source:GO_BACKUP_SOURCE};
 let snapshotSequence=0;
 async function backupRequest(path,expectedSource='Local Mock API'){
  try{
@@ -191,6 +191,59 @@ async function readGoSnapshot(id,backupId){
  if(!isGoBackup(result.payload.data,id,true)||result.payload.data.id!==backupId)throw Object.assign(new Error('The Go API returned an unexpected snapshot.'),{path});
  return {record:result.payload.data,info:result.info};
 }
+function historyReplaceConfiguration(id,backupId){
+ const route=routing();
+ if(!route.detail||route.requestedDeviceId!==id||state.detailTab!=='configuration')return;
+ const query=new URLSearchParams({tab:'configuration'});
+ if(backupId)query.set('backup',backupId);
+ history.replaceState(null,'','#/devices/'+encodeURIComponent(id)+'?'+query);
+}
+async function loadSavedConfiguration(id,selectedId=routing().query.get('backup')){
+ const sequence=++configurationHTTP.sequence;
+ Object.assign(configurationHTTP,{status:'loading',deviceId:id,selectedId,records:[],record:null,requests:[],
+  path:goBackupPath(id)+(selectedId?'/'+encodeURIComponent(selectedId):''),httpStatus:null,meta:null,error:null});
+ historyReplaceConfiguration(id,selectedId);render();
+ try{
+  const history=await readGoHistory(id);
+  if(sequence!==configurationHTTP.sequence)return;
+  const records=history.records.filter(b=>b.config_type==='running').sort((a,b)=>b.created_at.localeCompare(a.created_at));
+  Object.assign(configurationHTTP,{records,requests:[history.info]});
+  if(!selectedId&&!records.length){Object.assign(configurationHTTP,{status:'empty'});render();return;}
+  const wanted=selectedId||records[0].id;
+  configurationHTTP.selectedId=wanted;historyReplaceConfiguration(id,wanted);
+  const snapshot=await readGoSnapshot(id,wanted);
+  if(sequence!==configurationHTTP.sequence)return;
+  const metadata=records.find(b=>b.id===wanted);
+  if(!metadata)throw Object.assign(new Error('The requested backup is not in this device’s current saved running-config history.'),{httpStatus:404,path:snapshot.info.path,meta:snapshot.info.meta});
+  if(snapshot.record.config_type!=='running'||snapshot.record.content_hash!==metadata.content_hash||
+     snapshot.record.size_bytes!==metadata.size_bytes||snapshot.record.created_at!==metadata.created_at){
+   throw Object.assign(new Error('The Go API returned inconsistent saved configuration metadata.'),{path:snapshot.info.path});
+  }
+  Object.assign(configurationHTTP,{status:'ready',record:snapshot.record,requests:[history.info,snapshot.info]});
+ }catch(error){
+  if(sequence!==configurationHTTP.sequence)return;
+  Object.assign(configurationHTTP,backupFailure(error,configurationHTTP.path,GO_BACKUP_SOURCE),{record:null});
+ }
+ render();
+}
+function savedConfigurationBody(id){
+ const info=configurationHTTP;
+ const intro='<section class="saved-configuration"><div class="saved-config-heading"><div><h2>Saved running configuration</h2><p>Latest saved configuration — not live device state.</p></div>'+btn('Refresh versions','refresh-configuration','default','','activity')+'</div>';
+ if(info.deviceId!==id||info.status==='idle'||info.status==='loading')return intro+apiState({...info,status:'loading',source:GO_BACKUP_SOURCE,path:goBackupPath(id)},'Loading saved configuration…','Reading this Go device’s saved history and synthetic snapshot content.','retry-configuration')+'</section>';
+ if(info.status==='empty')return intro+httpEvidence(info.requests,GO_BACKUP_SOURCE)+'<section class="card api-state" role="status"><h2>No saved running configuration</h2><p>This Go device has no persisted running-config snapshots. No fixture configuration is substituted.</p>'+btn('Retry','retry-configuration')+'</section></section>';
+ if(info.status!=='ready'){
+  const title=info.httpStatus===401||info.httpStatus===403?'Saved configuration not authorized':info.status==='not-found'?'Saved configuration not found':'Saved configuration unavailable';
+  const description=info.status==='not-found'?'This device or backup UUID is unavailable. A Go restart regenerates snapshot IDs. Retry keeps the requested UUID; Refresh versions explicitly reloads the current list.':info.error;
+  return intro+apiState(info,title,description,'retry-configuration')+(info.selectedId?'<p class="saved-config-request">Requested backup: <code>'+esc(info.selectedId)+'</code></p>':'')+'</section>';
+ }
+ const selected=info.record,index=info.records.findIndex(b=>b.id===selected.id),other=info.records[index+1]||info.records[index-1]||selected;
+ const compare='#/compare?'+new URLSearchParams({device:id,left:other.id,right:selected.id});
+ const options=info.records.map((b,i)=>'<option value="'+esc(b.id)+'" '+(b.id===selected.id?'selected':'')+'>'+date(b.created_at)+' · '+time(b.created_at)+' · '+esc(b.id.slice(0,8))+(i===0?' · latest':'')+'</option>').join('');
+ return intro+httpEvidence(info.requests,GO_BACKUP_SOURCE)+'<article class="card saved-config-card"><div class="saved-config-toolbar"><div class="select-group"><label for="saved-config-version">Saved version</label><select id="saved-config-version" data-control="saved-config-version">'+options+'</select></div><span class="tiny-tag">'+(index===0?'LATEST SAVED':'OLDER SAVED VERSION')+'</span><a class="btn btn-primary" href="'+esc(compare)+'">'+icon('diff')+'Compare saved versions</a></div>'+
+  '<dl class="saved-config-metadata"><div><dt>Snapshot timestamp · UTC</dt><dd data-saved-timestamp="'+esc(selected.created_at)+'">'+date(selected.created_at)+' · '+time(selected.created_at)+'</dd></div><div><dt>Backup UUID</dt><dd><code id="saved-config-id">'+esc(selected.id)+'</code></dd></div><div><dt>SHA-256 · native content verification</dt><dd><code id="saved-config-sha">'+esc(selected.content_hash)+'</code></dd></div><div><dt>Saved size</dt><dd id="saved-config-size">'+selected.size_bytes+' bytes</dd></div></dl>'+
+  '<div class="saved-config-caption">'+icon('lock')+'Read-only synthetic snapshot · '+esc(id)+' · native BackupService.Content</div><pre id="saved-config-content" class="config-view saved-config-content" tabindex="0" aria-label="Saved synthetic running configuration">'+esc(selected.config)+'</pre><div class="saved-config-foot">DEMO / UNVERIFIED · Saved synthetic content only. No live configuration request, connector or SSH.</div></article></section>';
+}
+
 function comparisonHeading(route){
  return header('Go configuration comparison','See what changed. Understand what matters.','Native BackupService.Diff · persisted synthetic snapshots · no device access.',
   btn('Refresh snapshots','refresh-compare','default','','activity')+demoTag());
@@ -268,7 +321,12 @@ function enterRoute(){
  const route=routing();
  if(route.view==='overview')void loadDashboard();
  else if(route.view==='devices'){
-  if(route.detail){void loadDevice(route.requestedDeviceId);if(state.detailTab==='backups')void loadBackupHistory(route.requestedDeviceId);}
+  if(route.detail){
+   state.detailTab=['overview','configuration','backups'].includes(route.query.get('tab'))?route.query.get('tab'):'overview';
+   void loadDevice(route.requestedDeviceId);
+   if(state.detailTab==='backups')void loadBackupHistory(route.requestedDeviceId);
+   if(state.detailTab==='configuration')void loadSavedConfiguration(route.requestedDeviceId);
+  }
   else void loadInventory();
  }else if(route.view==='backups')void loadBackupHistory(route.query.get('device')||'all');
  else if(route.view==='compare')void loadComparison(route);
@@ -419,9 +477,9 @@ function backupsPage(route){
 function deviceDetail(d){
  const facts=[['Hostname',d.hostname],['Management address',d.management_ip],['Device group',d.device_group],['Platform',d.platform],['Software version',d.version],['Serial number',d.serial],['Connection','Disabled · no live access'],['Data source',GO_SOURCE],['Vendor / protocol',d.vendor+' / '+d.protocol],['Device operations','Disabled · demo record']];
  let body;
- if(state.detailTab==='configuration')body='<section class="card">'+cardHead('Node DEMO configuration · separate from Go','Static synthetic fixture text. Go configuration reads are not connected.',demoTag())+'<pre class="config-view">'+esc(d.backups[0]?.config||'No synthetic configuration snapshot is available.')+'</pre></section>';
+ if(state.detailTab==='configuration')body=savedConfigurationBody(d.id);
  else if(state.detailTab==='backups')body='<div class="backup-actions">'+btn('Refresh history','retry-backups','default','','activity')+btn('Create demo backup','create-backup','soft','data-device-id="'+d.id+'"','plus')+'</div>'+backupHistoryBody(d.id);
- else body='<section class="detail-grid"><article class="card">'+cardHead('Device profile','A sample record aligned with the inventory API.',demoTag())+'<div class="facts-grid">'+facts.map(([label,value])=>'<div><span class="fact-label">'+esc(label)+'</span><span class="fact-value">'+esc(value)+'</span></div>').join('')+'</div><div class="detail-note">'+icon('lock')+'Live connections, credentials, and configuration writes are disabled.</div></article><article class="card">'+cardHead('Go snapshot comparison','Persisted synthetic backups · native BackupService.Diff')+'<div class="aside-body"><p class="small muted">Choose versions from Go backup history. Browser-memory copies and configuration fixtures are separate.</p><a class="text-link" href="#/backups?device='+esc(d.id)+'">Browse Go backups '+icon('arrow')+'</a></div><div class="priority-card-footer">'+icon('shield')+d.findings.length+' prewritten fixture findings · '+badge(d.risk)+'</div></article></section>';
+ else body='<section class="detail-grid"><article class="card">'+cardHead('Device profile','Native Go Inventory record · disposable SQLite.',demoTag())+'<div class="facts-grid">'+facts.map(([label,value])=>'<div><span class="fact-label">'+esc(label)+'</span><span class="fact-value">'+esc(value)+'</span></div>').join('')+'</div><div class="detail-note">'+icon('lock')+'Live connections, credentials, and configuration writes are disabled.</div></article><article class="card">'+cardHead('Go snapshot comparison','Persisted synthetic backups · native BackupService.Diff')+'<div class="aside-body"><p class="small muted">Choose versions from Go backup history. Browser-memory copies and configuration fixtures are separate.</p><a class="text-link" href="#/backups?device='+esc(d.id)+'">Browse Go backups '+icon('arrow')+'</a></div><div class="priority-card-footer">'+icon('shield')+'Risk Review is fixture-only — not linked to this Go profile.'+'</div></article></section>';
  return'<a class="back-link" href="#/devices">'+icon('arrow')+'Back to device inventory</a><section class="page-heading"><div class="device-heading">'+glyph(d)+'<div><div class="eyebrow">'+esc(d.site)+' / DEMO DEVICE</div><h1>'+esc(d.display_name)+'</h1><p>'+esc(d.management_ip)+' &nbsp;·&nbsp; '+esc(d.model)+' &nbsp;·&nbsp; '+badge(d.risk)+'</p></div></div><div class="heading-actions"><button class="btn" disabled title="Live device access is disabled in this demo">'+icon('lock')+'Connect to device</button>'+btn('Go comparison','compare','primary','data-device-id="'+d.id+'"','diff')+'</div></section>'+apiSource(deviceHTTP)+'<nav class="detail-tabs" aria-label="Device detail tabs">'+['overview','configuration','backups','risk'].map(t=>'<button class="'+(state.detailTab===t?'active':'')+'" data-action="detail-tab" data-tab="'+t+'" data-device-id="'+d.id+'">'+({overview:'Overview',configuration:'Configuration',backups:'Backup history',risk:'Risk review'}[t])+'</button>').join('')+'</nav>'+body;
 }
 function diffLines(left,right){
@@ -498,7 +556,7 @@ function render(){
  document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===route.view));
  document.querySelector('#breadcrumb').textContent=route.detail?(deviceHTTP.status==='ready'&&deviceHTTP.id===route.requestedDeviceId?deviceHTTP.record.display_name:'Device details'):({overview:'Overview',devices:'Device inventory',backups:'Configuration backups',compare:'Compare configurations',risk:'Risk reviews'}[route.view]);
  document.querySelector('#inventory-count').textContent=knownGoDeviceCount===null?'—':knownGoDeviceCount;
- main.setAttribute('aria-busy',String((route.view==='overview'&&dashboardHTTP.status==='loading')||(route.view==='devices'&&(route.detail?deviceHTTP.status==='loading'||state.detailTab==='backups'&&historyHTTP.status==='loading':inventoryHTTP.status==='loading'))||route.view==='backups'&&historyHTTP.status==='loading'||route.view==='compare'&&comparisonHTTP.status==='loading'));
+ main.setAttribute('aria-busy',String((route.view==='overview'&&dashboardHTTP.status==='loading')||(route.view==='devices'&&(route.detail?deviceHTTP.status==='loading'||state.detailTab==='backups'&&historyHTTP.status==='loading'||state.detailTab==='configuration'&&configurationHTTP.status==='loading':inventoryHTTP.status==='loading'))||route.view==='backups'&&historyHTTP.status==='loading'||route.view==='compare'&&comparisonHTTP.status==='loading'));
  main.innerHTML=route.detail?inventoryDevicePage(route):({overview:overview,devices:inventory,backups:()=>backupsPage(route),compare:()=>comparePage(route),risk:()=>riskPage(route)}[route.view])();
  iconize();
  if(focus){const next=document.getElementById(focus.id);if(next){next.focus({preventScroll:true});if(typeof focus.start==='number'&&next.setSelectionRange)try{next.setSelectionRange(focus.start,focus.end);}catch{}}}
@@ -522,16 +580,22 @@ document.addEventListener('click',event=>{
   if(name==='retry-dashboard')void loadDashboard();
   if(name==='retry-inventory')void loadInventory();
   if(name==='retry-device')void loadDevice(routing().requestedDeviceId);
+  if(name==='retry-configuration')void loadSavedConfiguration(routing().requestedDeviceId,configurationHTTP.selectedId);
+  if(name==='refresh-configuration')void loadSavedConfiguration(routing().requestedDeviceId,null);
   if(name==='retry-backups'){const route=routing();void loadBackupHistory(route.detail?route.requestedDeviceId:route.query.get('device')||'all');}
   if(name==='retry-compare')void loadComparison();
   if(name==='refresh-compare'){const requested=routing().query.get('device');const id=comparisonHTTP.devices.some(d=>d.id===requested)?requested:comparisonHTTP.device?.id;const target='/compare'+(id?'?'+new URLSearchParams({device:id}):'');if(location.hash==='#'+target)void loadComparison();else location.hash=target;}
   if(name==='retry-snapshot')void showSnapshot(action.dataset.deviceId,action.dataset.backupId);
-  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory and device profiles use the existing Aegis Go API, native authentication/RBAC and a disposable SQLite database through a same-origin adapter. Backup history and snapshot viewing use Go BackupService, disposable SQLite metadata and seeded synthetic files. Comparison uses native Go BackupService.Diff and the same Go snapshot contents; browser alignment is presentation only. Dashboard uses the same Go Inventory and backup histories. Risk Review is a separate fixture demonstration; local copies stay in browser memory. No production backend, device credentials, SSH, production databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
+  if(name==='about')modal('A safe place to explore.','<p>Aegis brings network inventory, configuration history, comparison and change review into one workspace.</p><p>Inventory and device profiles use the existing Aegis Go API, native authentication/RBAC and a disposable SQLite database through a same-origin adapter. Backup history, snapshot viewing and the device Configuration tab use Go BackupService, disposable SQLite metadata and seeded synthetic files. Comparison uses native Go BackupService.Diff and the same Go snapshot contents; browser alignment is presentation only. Dashboard uses the same Go Inventory and backup histories. Risk Review is a separate fixture demonstration; local copies stay in browser memory. No production backend, device credentials, SSH, production databases or device changes are connected.</p><dl><dt>Phase E</dt><dd>DEFERRED / NOT ACCEPTED</dd><dt>Historical E1</dt><dd>Go cases passed; Controller failed</dd><dt>Production release</dt><dd>BLOCKED</dd><dt>Phase F / Task #7</dt><dd>Not authorized</dd></dl>'+btn('Back to exploring','close-modal'));
   if(name==='activity')go('backups');
   if(name==='close-modal')closeModal();
   if(name==='layout'){state.layout=action.dataset.layout;render();}
   if(name==='reset-filters'){state.search='';state.site='all';state.inventoryRisk='all';state.riskImpact='all';document.querySelector('#global-search').value='';render();}
-  if(name==='detail-tab'){if(action.dataset.tab==='risk'){go('risk',{device:d.id});}else{state.detailTab=action.dataset.tab;if(state.detailTab==='backups')void loadBackupHistory(d.id);else render();}}
+  if(name==='detail-tab'){
+   const id=routing().requestedDeviceId,tab=action.dataset.tab;
+   if(tab==='risk')go('risk',{device:id});
+   else go('devices/'+encodeURIComponent(id),{tab});
+  }
   if(name==='compare')compareTo({id:action.dataset.deviceId||state.selectedDevice},action.dataset.right);
   if(name==='risk')go('risk',{device:d.id});
   if(name==='swap'){const l=document.querySelector('#compare-left').value,r=document.querySelector('#compare-right').value;go('compare',{device:comparisonHTTP.device.id,left:r,right:l});}
@@ -561,6 +625,7 @@ document.addEventListener('input',event=>{
 });
 document.addEventListener('change',event=>{
  const el=event.target,control=el.dataset.control;
+ if(control==='saved-config-version')void loadSavedConfiguration(routing().requestedDeviceId,el.value);
  if(control==='site'){state.site=el.value;render();}
  if(control==='inventory-risk'){state.inventoryRisk=el.value;render();}
  if(control==='backups-device')go('backups',el.value==='all'?{}:{device:el.value});
