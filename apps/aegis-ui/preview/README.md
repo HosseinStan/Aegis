@@ -1,8 +1,8 @@
 # Aegis local MVP preview
 
-**DEMO — SYNTHETIC DATA — UNVERIFIED RISK FINDINGS**
+**DEMO — SYNTHETIC DATA — RISK NOT EVALUATED**
 
-Dashboard, Inventory, device profiles, Backup History, snapshot viewing and Configuration Comparison share the existing Go API, native authentication/RBAC, services and disposable SQLite. Risk Review remains separate: **FIXTURE DEMO — UNVERIFIED — NOT LINKED TO GO DATA**. This zero-dependency Node/HTML preview is not the final Vue implementation; the [Vue architecture](../../../docs/vue-integration.md) remains the intended frontend direction.
+Dashboard, Inventory, device profiles, saved Configuration, Backup History, snapshot viewing, Configuration Comparison and Change Review share the existing Go API, native authentication/RBAC, services and disposable SQLite. Change Review is an evidence preview: **RISK NOT EVALUATED — DEMO / UNVERIFIED**. It does not integrate the unfinished Task #6 risk engine. This zero-dependency Node/HTML preview is not the final Vue implementation; the [Vue architecture](../../../docs/vue-integration.md) remains the intended frontend direction.
 
 ## Run the isolated Go-backed preview
 
@@ -27,15 +27,15 @@ Then run from any directory, replacing the absolute paths:
 
 On non-Windows systems the binary may be named aegis-inventory-demo. An optional --port=4318 fixes only the preview port. Both servers bind to 127.0.0.1; no bind-address override exists.
 
-The supervisor prints only non-secret Go/preview URLs, seed counts and a sanitized authentication result. Open the preview URL with #/overview, #/devices, #/backups or #/compare. The ignored runtime.json holds the preview URL/PID, never credentials. The supervisor accepts these local terminal commands:
+The supervisor prints only non-secret Go/preview URLs, seed counts and a sanitized authentication result. Open the preview URL with #/overview, #/devices, #/backups, #/compare or #/review. The ignored runtime.json holds the preview URL/PID, never credentials. The supervisor accepts these local terminal commands:
 
-- **stop-api:** stop only its Go child; refreshed Dashboard/Inventory/history/comparison show unavailable while the preview and separate fixture Risk Review remain available.
+- **stop-api:** stop only its Go child; refreshed Go workspace views, including Change Review, show unavailable while the preview server remains available.
 - **start-api:** create a fresh disposable SQLite database and identity session; then press Retry in the browser.
 - **quit** or Ctrl+C: stop this supervisor and its Go child.
 
 Each Go start creates a new aegis-inventory-demo-* directory under the external parent. It never accepts a database DSN or opens an existing database. Disposable directories are retained on shutdown; the supervisor never cleans, restores or automatically reruns them.
 
-Running server.mjs alone still serves the separate Risk Review fixture, but Dashboard, Inventory, Backup History and Compare explicitly show unavailable. They never substitute Node fixture results.
+Running server.mjs alone serves the preview shell, but all Go workspace views explicitly show unavailable. They never substitute Node fixture results.
 
 ## Unified Go Dashboard
 
@@ -44,7 +44,7 @@ Running server.mjs alone still serves the separate Risk Review fixture, but Dash
 - Group distribution counts the actual device_group values. It represents no network links, neighbors, health or risk assessment. No fixture risk totals enter Dashboard metrics.
 - Device links open Go profiles, snapshot buttons read native BackupService.Content, and Compare links carry actual current Go backup UUIDs. Refresh Dashboard reads the complete collection again after a Go restart; loading/failure clears the displayed metrics and records instead of retaining a misleading old result.
 - The shared Inventory navigation counter uses the successfully loaded Go device count. The history shortcut opens Go Backup History. Source/request details are available in a collapsed disclosure.
-- The isolated seed currently gives **4 devices, 12 snapshots, 100% coverage and 3 groups**. The UI calculates these from responses; they are not hardcoded Dashboard values. Risk Review has its own explicit fixture notice and no numeric navigation badge.
+- The isolated seed currently gives **4 devices, 12 snapshots, 100% coverage and 3 groups**. The UI calculates these from responses; they are not hardcoded Dashboard values. The Dashboard links to Go-backed Change Review without adding risk statistics.
 
 ## Real Go Inventory flow
 
@@ -60,10 +60,10 @@ Device details use /api/go/v1/devices/:id -> /api/v1/devices/:id.
 ### Saved device Configuration tab
 
 - Open a Go device and choose Configuration, or use #/devices/:id?tab=configuration. The tab reads that device's existing backup history, filters persisted running-config snapshots and initially selects the newest timestamp. It then reads the selected content through the existing native BackupService.Content bridge path.
-- Timestamp, actual backup UUID, SHA-256, byte size and read-only synthetic content come from Go responses. The screen states **Latest saved configuration — not live device state.** Older selections are labeled Older saved version. No live configuration endpoint, connector or SSH is used.
+- Timestamp, actual backup UUID, SHA-256, byte size and read-only synthetic content come from Go responses. The newest selection states **Latest saved configuration — not live device state.** Older selections state **Selected saved configuration — not live device state** and Older saved version. No live configuration endpoint, connector or SSH is used.
 - The version selector contains only that Go device's saved running-config UUIDs. Compare opens the selected UUID and an adjacent saved version in the existing native Go comparison. Fixture configurations and browser-memory copies never join this list.
 - The URL preserves the selected UUID. Retry retains it, including after a Go restart; a stale UUID shows not-found instead of resolving to a replacement. **Refresh versions** explicitly discards the selection, reads the current list and selects its latest saved version. Empty, loading, authorization failure, 404 and unavailable states show no fallback content.
-- Go device profiles no longer merge fixture configuration or finding counts. Risk Review remains a separate, clearly labeled fixture screen. Configuration text wraps long lines within its own read-only panel at narrow widths.
+- Go device profiles do not merge fixture configuration or finding counts. Their Change review tab opens the same device in the Go-backed review; when viewing a saved Configuration, it carries that selected UUID and an adjacent Go version. Configuration text wraps long lines within its own read-only panel at narrow widths.
 
 The dedicated cmd/inventory-demo entrypoint registers ONLY internal/connectors/mock. It does not import Cisco SSH, load production config/.env, construct ConfigService, or accept device-operation routes. Four disabled records use documentation-range addresses and stable demo IDs. Native Go records are returned by existing services; the adapter only projects presentation fields.
 
@@ -99,6 +99,15 @@ Inventory shows **Aegis Go API — Isolated Demo**, actual GET paths/status and 
 - Long IDs and HTTP metadata are collapsed by default. Narrow layouts wrap code in both side-by-side panes, keeping both columns visible.
 - The existing mock-only connector, disposable initialization, server-held identity and backups.read role are unchanged. No extra permission or write route is introduced.
 
+## Go-backed Change Review
+
+- Open #/review with optional device, left and right parameters. The legacy #/risk route maps to this Go view, preserving its requested selection; it no longer renders fixture findings.
+- Review and Configuration Compare share the same loader, validated Go Inventory/history/content/Diff reads, selectors and comparison presentation. No second diff engine, Go service, endpoint, migration or permission is added. Side-by-side uses the existing browser alignment; native Go counts and Unified text remain authoritative.
+- The summary shows actual device identity, before/after UUIDs and timestamps, native changed status and line counts. Evidence paths/request IDs remain available. Links open the exact same UUID pair in full Compare or a selected saved Configuration.
+- **RISK NOT EVALUATED — DEMO / UNVERIFIED** appears even during loading/failure. No risk classification, compliance finding, vulnerability finding, security approval or Task #6 engine result is produced.
+- A checkbox records **Viewed in this demo — not approved or persisted** only for the exact ordered device/snapshot pair in this tab's memory. Reload clears it. No storage, HTTP write, audit or authorization record is used.
+- Retry keeps stale UUIDs and shows not-found; Refresh snapshots explicitly reloads current history and resets versions. Missing/cross-device IDs or an unavailable Go API never fall back to fixture data. Review requires disabled mock demo records.
+
 ## Explicit legacy fixture material
 
 - GET /api/mock/v1/devices/:id/backups: synthetic metadata without configuration text.
@@ -107,11 +116,11 @@ Inventory shows **Aegis Go API — Isolated Demo**, actual GET paths/status and 
 - The active Compare screen uses Go snapshots only. Older independent demo workspaces retain their previous fixture comparison experience.
 - Browser-memory copies can still be viewed, but their Compare action is removed and they are explicitly excluded from Go comparison.
 - Create demo backup copies a legacy fixture only into browser memory, in a separate section labeled NOT persisted to Go or Node. It creates no HTTP backup, SQLite row or file. Reload discards it.
-- Prewritten risk findings remain fixture-based. Risk Review is labeled **FIXTURE DEMO — UNVERIFIED — NOT LINKED TO GO DATA**. Reviewing a finding does not create authorization or security acceptance. The device Configuration tab uses only saved Go snapshots.
+- Old prewritten risk findings are no longer rendered in the active workspace. Historical demo-data.json bytes remain unchanged for the separate browser-memory copy feature; those copies never join Go Review, Configuration or Compare.
 
 ## Minimal validation and limits
 
-For the saved-Configuration milestone, Node syntax checks, focused existing HTTP reads, version/content/metadata and Compare checks, desktop/narrow layouts and a controlled Go stop/start verify the visible flow. The unchanged, previously built Go 1.26.10 demo binary is reused; no backend build or dependency change is needed. Dashboard, Inventory, Backup History, Content and native Diff remain usable. These checks are not Phase E, race, capacity, performance or release validation.
+For the Change Review milestone, Node syntax checks, focused existing HTTP reads, native change counts/identical/404 checks, browser selection and Compare links, desktop/narrow layouts and a controlled Go stop/start verify the visible flow. The unchanged, previously built Go 1.26.10 demo binary is reused; no backend build or dependency change is needed. Dashboard, Inventory, saved Configuration, Backup History, Content and native Diff remain usable. These checks are not Phase E, race, capacity, performance or release validation.
 
 No real SSH, external device addresses, credential handling, production database, discovery or configuration changes are enabled.
 

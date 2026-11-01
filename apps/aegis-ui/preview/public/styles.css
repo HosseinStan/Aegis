@@ -20,7 +20,7 @@
 .session-note{padding:0 24px 22px;color:var(--muted);font-size:13px;line-height:1.8}
 .api-request-id .api-source-detail{margin-top:12px;flex-wrap:wrap}
 .api-request-id code{overflow-wrap:anywhere}
-.fixture-nav-tag{margin-left:auto;font-size:9px;color:#afbf9e;border:1px solid #405448;padding:2px 5px;border-radius:4px}
+.review-nav-tag{margin-left:auto;font-size:9px;color:#afbf9e;border:1px solid #405448;padding:2px 5px;border-radius:4px}
 .go-dashboard{min-width:0}
 .go-dashboard .api-source{margin-bottom:20px;min-width:0}
 .go-dashboard .api-source-detail{min-width:0;max-width:100%;flex-wrap:wrap}
@@ -54,12 +54,12 @@
 .recent-backup-main small,.recent-backup-time small{display:block;font-size:9px;color:var(--muted);line-height:1.8}
 .recent-backup-time{font-size:11px;color:#6b805d}
 .recent-backup-row>.btn{font-size:10px;padding:8px 12px}
-.fixture-risk-note{margin-top:22px;display:flex;align-items:center;gap:13px;padding:19px;border:1px dashed #d7dfce;border-radius:10px;color:#879579;background:#f7f9f3}
-.fixture-risk-note>div{flex:1;min-width:0}
-.fixture-risk-note strong{font-size:11px;font-weight:550}
-.fixture-risk-note p{font-size:9px;line-height:1.7;margin:5px 0 0}
-.fixture-risk-note>.text-link{font-size:10px}
-@media(max-width:950px){.fixture-nav-tag{display:none}}
+.change-review-note{margin-top:22px;display:flex;align-items:center;gap:13px;padding:19px;border:1px dashed #d7dfce;border-radius:10px;color:#879579;background:#f7f9f3}
+.change-review-note>div{flex:1;min-width:0}
+.change-review-note strong{font-size:11px;font-weight:550}
+.change-review-note p{font-size:9px;line-height:1.7;margin:5px 0 0}
+.change-review-note>.text-link{font-size:10px}
+@media(max-width:950px){.review-nav-tag{display:none}}
 @media(max-width:700px){
  .go-dashboard .dashboard-grid{grid-template-columns:minmax(0,1fr)}
  .go-dashboard .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -70,12 +70,47 @@
  .recent-backup-row{grid-template-columns:minmax(0,1fr) auto;gap:8px}
  .recent-backup-main{grid-column:1/-1}
  .recent-backup-list{padding:0 17px 8px}
- .fixture-risk-note{flex-wrap:wrap}
- .fixture-risk-note>.text-link{width:100%;margin-left:29px}
+ .change-review-note{flex-wrap:wrap}
+ .change-review-note>.text-link{width:100%;margin-left:29px}
  .group-distribution{padding-left:19px;padding-right:19px}
  .go-device-list{padding-left:17px;padding-right:17px}
 }
 .go-comparison{min-width:0}
+.review-warning{display:flex;align-items:flex-start;gap:12px;padding:17px 20px;margin-bottom:21px;border:1px solid #dce8cf;border-radius:10px;background:#edf4e5;color:#557349}
+.review-warning>.icon{flex-shrink:0;margin-top:2px}
+.review-warning strong{font-size:12px;line-height:1.8;display:block}
+.review-warning p{font-size:11px;line-height:1.8;margin:4px 0 0;color:#7c8e6f}
+.review-overview{margin-bottom:20px;min-width:0}
+.review-device{display:flex;align-items:center;gap:13px;flex-wrap:wrap;padding:22px;border-bottom:1px solid var(--border)}
+.review-device>div{min-width:0;flex:1}
+.review-device .eyebrow{font-size:9px}
+.review-device h2{font-size:21px;margin:5px 0 6px;color:#45673d}
+.review-device h2 a{color:inherit;text-decoration:none}
+.review-device p{font-size:11px;color:var(--muted);margin:0;line-height:1.8;overflow-wrap:anywhere}
+.review-change-state{display:flex;align-items:center;gap:7px;background:#f1f6e9;border:1px solid #dce8cf;border-radius:6px;padding:8px 10px;font-size:11px;color:#648653}
+.review-snapshots{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;padding:21px 22px}
+.review-snapshot{display:flex;flex-direction:column;align-items:flex-start;gap:9px;min-width:0}
+.review-snapshot-label{font-size:9px;letter-spacing:1px;color:var(--muted)}
+.review-snapshot strong{font-size:12px;color:#5c7950;font-weight:550;line-height:1.8}
+.review-snapshot code{font:11px/1.8 "Cascadia Code",Consolas,monospace;color:#7c8e6f;overflow-wrap:anywhere;max-width:100%}
+.review-snapshot .text-link{font-size:10px}
+.review-overview-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:15px 22px;background:#fbfcf9;border-top:1px solid var(--border);font-size:10px;color:var(--muted)}
+.review-overview-foot .btn{font-size:11px}
+.review-ack{padding:18px 20px;margin-top:20px;border:1px dashed #d4dfca;border-radius:10px;background:#f9fbf6;color:#718663}
+.review-ack label{display:flex;align-items:flex-start;gap:9px;font-size:12px;line-height:1.8}
+.review-ack input{margin-top:4px;accent-color:#5e824c}
+.review-ack p{font-size:10px;line-height:1.8;margin:8px 0 0 23px;color:var(--muted)}
+@media(max-width:700px){
+ .review-warning{padding:15px}
+ .review-warning strong{font-size:11px}
+ .review-device{padding:17px;gap:11px}
+ .review-device>div{flex:1 1 calc(100% - 50px)}
+ .review-change-state{margin-left:44px}
+ .review-snapshots{grid-template-columns:minmax(0,1fr);padding:18px;gap:22px}
+ .review-snapshot+.review-snapshot{border-top:1px solid var(--border);padding-top:18px}
+ .review-overview-foot{padding:15px 17px}
+ .review-ack{padding:15px}
+}
 .server-required{display:none}
 .saved-configuration{min-width:0}
 .saved-config-heading{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}
