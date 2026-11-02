@@ -10,8 +10,17 @@ function parse(){
 }
 export function useHashRoute(){
   const route=shallowRef(parse());
-  const update=()=>{route.value=parse();window.scrollTo(0,0);};
+  const update=()=>{
+    const next=parse(),previous=route.value;route.value=next;
+    if(next.name!=='detail'||next.id!==previous.id||next.query.get('tab')!==previous.query.get('tab'))window.scrollTo(0,0);
+  };
   window.addEventListener('hashchange',update);
   onScopeDispose(()=>window.removeEventListener('hashchange',update));
   return route;
+}
+export function replaceHashRoute(hash){
+  const next=hash.startsWith('#')?hash:'#'+hash;
+  if(location.hash===next)return;
+  const oldURL=location.href;history.replaceState(null,'',next);
+  window.dispatchEvent(new HashChangeEvent('hashchange',{oldURL,newURL:location.href}));
 }

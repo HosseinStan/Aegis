@@ -41,13 +41,48 @@ export async function getDevice(id,signal){
   if(!isDevice(result.data)||result.data.id!==id)throw new DemoAPIError('The Go demo returned an unexpected device profile.',result.evidence);
   return {device:result.data,requests:[result.evidence]};
 }
-async function getHistory(device,signal){
-  const result=await read('/api/go/v1/devices/'+encodeURIComponent(device.id)+'/backups',BACKUP_SOURCE,signal);
-  if(!Array.isArray(result.data)||!result.data.every(b=>b.device_id===device.id&&b.source==='AEGIS_GO_BACKUP_DEMO'&&b.synthetic===true&&
-    typeof b.id==='string'&&typeof b.created_at==='string'&&Number.isFinite(Date.parse(b.created_at)))||new Set(result.data.map(b=>b.id)).size!==result.data.length){
+function isSavedBackup(b,deviceId){
+  return b&&b.device_id===deviceId&&b.source==='AEGIS_GO_BACKUP_DEMO'&&b.synthetic===true&&b.config_type==='running'&&b.trigger_type==='demo_seed'&&
+    typeof b.id==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.id)&&
+    typeof b.content_hash==='string'&&/^[a-f0-9]{64}$/.test(b.content_hash)&&Number.isSafeInteger(b.size_bytes)&&b.size_bytes>=0&&
+    ['created_at','retrieved_at'].every(key=>typeof b[key]==='string'&&Number.isFinite(Date.parse(b[key])));
+}
+export async function getBackupHistory(deviceId,signal){
+  const result=await read('/api/go/v1/devices/'+encodeURIComponent(deviceId)+'/backups',BACKUP_SOURCE,signal);
+  if(!Array.isArray(result.data)||!result.data.every(b=>isSavedBackup(b,deviceId))||new Set(result.data.map(b=>b.id)).size!==result.data.length){
     throw new DemoAPIError('The Go demo returned unexpected backup metadata.',result.evidence);
   }
-  return {backups:result.data.map(backup=>({...backup,device})),request:result.evidence};
+  return {backups:[...result.data].sort((a,b)=>b.created_at.localeCompare(a.created_at)),requests:[result.evidence]};
+}
+async function getHistory(device,signal){
+  const history=await getBackupHistory(device.id,signal);
+  return {backups:history.backups.map(backup=>({...backup,device})),request:history.requests[0]};
+}
+export async function getSavedConfiguration(deviceId,requestedId,signal){
+  let wanted=requestedId||null;
+  try{
+    const history=await getBackupHistory(deviceId,signal),versions=history.backups;
+    if(!wanted&&!versions.length)return {deviceId,versions,selected:null,requests:history.requests};
+    wanted=wanted||versions[0].id;
+    const path='/api/go/v1/devices/'+encodeURIComponent(deviceId)+'/backups/'+encodeURIComponent(wanted);
+    const content=await read(path,BACKUP_SOURCE,signal),selected=content.data;
+    if(!isSavedBackup(selected,deviceId)||selected.id!==wanted||typeof selected.config!=='string'||
+       !selected.config.startsWith('! AEGIS SYNTHETIC DEMO — DISPOSABLE BACKUP SNAPSHOT\n')){
+      throw new DemoAPIError('The Go API returned an unexpected synthetic saved configuration.',content.evidence);
+    }
+    const metadata=versions.find(backup=>backup.id===wanted);
+    if(!metadata)throw new DemoAPIError('This UUID is not in the device’s current saved running-configuration history.',{...content.evidence,status:null});
+    const immutable=['id','device_id','source','synthetic','config_type','trigger_type','created_at','retrieved_at','content_hash','size_bytes'];
+    if(immutable.some(key=>metadata[key]!==selected[key]))throw new DemoAPIError('Saved content metadata does not match the Go history record.',content.evidence);
+    const bytes=new TextEncoder().encode(selected.config);
+    const digest=await crypto.subtle.digest('SHA-256',bytes);
+    const sha256=Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
+    if(bytes.byteLength!==selected.size_bytes||sha256!==selected.content_hash)throw new DemoAPIError('Saved configuration bytes do not match the reported size and SHA-256.',content.evidence);
+    return {deviceId,versions,selected,requests:[...history.requests,content.evidence]};
+  }catch(error){
+    if(error&&typeof error==='object')error.selectedId=wanted;
+    throw error;
+  }
 }
 export async function getDashboard(signal){
   const inventory=await getDevices(signal);
@@ -61,7 +96,7 @@ export async function getDashboard(signal){
     coverage:inventory.devices.length?Math.round(100*covered.size/inventory.devices.length):null,covered:covered.size,
     groups:[...groups].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])),latest:backups[0]||null};
 }
-export const savedLink=b=>previewLink('/devices/'+encodeURIComponent(b.device_id)+'?'+new URLSearchParams({tab:'configuration',backup:b.id}));
+export const savedLink=b=>'#/devices/'+encodeURIComponent(b.device_id)+'?'+new URLSearchParams({tab:'configuration',backup:b.id});
 export function compareLink(backup,backups){
   const versions=backups.filter(b=>b.device_id===backup.device_id),index=versions.findIndex(b=>b.id===backup.id);
   const other=versions[index+1]||versions[index-1]||backup;
