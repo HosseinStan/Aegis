@@ -84,16 +84,26 @@ export async function getSavedConfiguration(deviceId,requestedId,signal){
     throw error;
   }
 }
-export async function getDashboard(signal){
+export async function getBackupWorkspace(deviceId,signal){
   const inventory=await getDevices(signal);
-  const histories=await Promise.all(inventory.devices.map(device=>getHistory(device,signal)));
+  if(deviceId&&!inventory.devices.some(device=>device.id===deviceId)){
+    // Preserve the native profile's 401/403/404 instead of inventing an HTTP status.
+    const profile=await getDevice(deviceId,signal);
+    throw new DemoAPIError('This device is not in the current Go Inventory.',{...profile.requests[0],status:null});
+  }
+  const devices=deviceId?inventory.devices.filter(device=>device.id===deviceId):inventory.devices;
+  const histories=await Promise.all(devices.map(device=>getHistory(device,signal)));
   const backups=histories.flatMap(h=>h.backups).sort((a,b)=>b.created_at.localeCompare(a.created_at)||a.device.display_name.localeCompare(b.device.display_name));
   if(new Set(backups.map(b=>b.id)).size!==backups.length)throw new DemoAPIError('The Go demo returned duplicate backup identifiers.');
+  return {devices:inventory.devices,backups,requests:[...inventory.requests,...histories.map(h=>h.request)]};
+}
+export async function getDashboard(signal){
+  const workspace=await getBackupWorkspace(null,signal),{devices,backups}=workspace;
   const covered=new Set(backups.map(b=>b.device_id));
   const groups=new Map();
-  for(const device of inventory.devices)groups.set(device.device_group,(groups.get(device.device_group)||0)+1);
-  return {devices:inventory.devices,backups,requests:[...inventory.requests,...histories.map(h=>h.request)],
-    coverage:inventory.devices.length?Math.round(100*covered.size/inventory.devices.length):null,covered:covered.size,
+  for(const device of devices)groups.set(device.device_group,(groups.get(device.device_group)||0)+1);
+  return {...workspace,
+    coverage:devices.length?Math.round(100*covered.size/devices.length):null,covered:covered.size,
     groups:[...groups].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])),latest:backups[0]||null};
 }
 export const savedLink=b=>'#/devices/'+encodeURIComponent(b.device_id)+'?'+new URLSearchParams({tab:'configuration',backup:b.id});

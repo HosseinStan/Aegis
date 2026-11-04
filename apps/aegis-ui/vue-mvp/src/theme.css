@@ -215,6 +215,42 @@ select{border:1px solid var(--border);border-radius:6px;background:#fff;padding:
 .saved-content{margin:0;padding:23px;max-height:600px;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2;font:12px/1.95 "Cascadia Code",Consolas,monospace;color:#5b7150;background:#fbfcf9}
 .saved-footer{padding:15px 22px;border-top:1px solid var(--border);font-size:10px;line-height:1.8;color:#91a180}
 .saved-request{font-size:11px;line-height:1.9;color:#8b9d7b;overflow-wrap:anywhere}
+.history-summary{display:flex;align-items:center;gap:30px;flex-wrap:wrap;padding:20px 23px;margin:22px 0;background:#edf4e5;border:1px solid #dce8cf;border-radius:10px}
+.history-summary>div{display:flex;align-items:center;gap:10px}
+.history-summary strong{font-size:29px;font-weight:550;letter-spacing:-1px;color:#315b35}
+.history-summary span{font-size:11px;color:#718663}
+.history-summary>.tiny-tag{margin-left:auto;font-size:8px}
+.history-filter label{font-size:11px;color:#718663}
+.history-filter select{min-width:0;max-width:100%}
+.history-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:19px}
+.history-card-head{display:flex;align-items:center;gap:11px;padding:20px 21px;border-bottom:1px solid #edf0e9}
+.history-card-head>div{min-width:0;flex:1}
+.history-card-head a{font-size:12px;font-weight:600;color:#557749;overflow-wrap:anywhere}
+.history-card-head p{font-size:10px;line-height:1.8;color:#8a9b7c;margin:5px 0 0}
+.history-body{padding:18px 21px}
+.history-body h2{font-size:12px}
+.history-metadata{display:grid;gap:17px;margin:18px 0 0}
+.history-metadata dt{font-size:9px;color:#8a9b7c;margin-bottom:5px}
+.history-metadata dd{margin:0;font-size:11px;line-height:1.8;color:#607c50;overflow-wrap:anywhere}
+.history-metadata code{font:10px/1.9 "Cascadia Code",Consolas,monospace;overflow-wrap:anywhere}
+.history-properties{display:flex;gap:22px;flex-wrap:wrap}
+.history-actions{display:flex;gap:9px;flex-wrap:wrap;padding:15px 21px;border-top:1px solid #edf0e9;background:#fbfcf9}
+.history-actions .btn{font-size:10px;min-height:35px}
+.history-footnote{font-size:10px;line-height:1.9;color:#8a9b7c;margin-top:20px}
+@media(max-width:1150px){.history-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:700px){
+  .history-summary{padding:16px;gap:15px}
+  .history-summary>div{flex-basis:100%}
+  .history-summary>.tiny-tag{margin-left:0;white-space:normal;line-height:1.7}
+  .history-filter label{flex-basis:100%}
+  .history-filter select{flex-basis:100%}
+  .history-filter>span{margin-left:0;flex-basis:100%}
+  .history-card-head{padding:17px;flex-wrap:wrap}
+  .history-card-head>.tiny-tag{margin-left:45px}
+  .history-body{padding:17px}
+  .history-actions{padding:14px 17px}
+  .history-actions .btn{width:100%}
+}
 @media(max-width:700px){
   .device-tabs{gap:20px}
   .device-tabs>a{font-size:10px}

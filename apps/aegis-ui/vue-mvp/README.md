@@ -1,6 +1,6 @@
 # Aegis Vue MVP slice
 
-Additional Vue development frontend for Dashboard, Inventory, basic Go device profiles and native Saved Configuration. The standalone [Node/HTML preview](../preview/README.md) is retained unchanged. No office Vue application source was supplied or assumed.
+Additional Vue development frontend for Dashboard, Inventory, basic Go device profiles, native Saved Configuration and Backup History. The standalone [Node/HTML preview](../preview/README.md) is retained unchanged. No office Vue application source was supplied or assumed.
 
 **SYNTHETIC / DEMO — RISK NOT EVALUATED. Phase E deferred / not accepted. Production blocked.**
 
@@ -42,7 +42,7 @@ Browser HTTP GET → Vite same-origin proxy → existing authenticated Node brid
 - Vue uses Inventory list/profile, backup-history metadata and selected saved content through the existing /api/go/v1/devices routes. It imports no device or backup fixture collection and implements no mock API or Go business logic.
 - Dashboard derives counts, coverage, latest snapshot, groups and recent backup links from the actual Go responses. Loading/failure clears displayed records; Retry never substitutes fixtures.
 - Inventory has reactive search/group filters and device navigation. Basic profiles show only native Go fields, with absent software/serial information explicitly marked unavailable.
-- Saved Configuration opens natively inside Vue, including Dashboard snapshot links. Backup History, the modal Snapshot Viewer, native Compare and Change Review remain in the full existing preview. Their links explicitly open it separately, using the same Node origin and current Go UUIDs.
+- Saved Configuration and Backup History open natively inside Vue, including Sidebar, Dashboard and device shortcuts. The modal Snapshot Viewer, native Compare and Change Review remain in the full existing preview. External links use the same Node origin and current Go UUIDs.
 - Vue components and composables own rendering, requests, cancellation and reactive state. The old app.js is not wrapped, imported or copied into the application.
 - Only the public Node origin is bundled. Go credentials and tokens remain exclusively in the existing supervisor/bridge process; no browser token, localStorage or sessionStorage is used.
 - No SSH, live configuration endpoint, production database, device operation, backup write or discovery is added. The existing mock-only backend, RBAC, seeds and read-only bridge are unchanged.
@@ -59,4 +59,13 @@ Browser HTTP GET → Vite same-origin proxy → existing authenticated Node brid
 
 ## Focused checks
 
-Run `pnpm test:config` for the focused Node built-in contract checks and `pnpm build`. In the browser, open current/older saved configurations, inspect metadata and Compare links, and use only the new supervisor's stop-api/start-api to verify stale UUID 404, Retry retention and Refresh recovery. Check desktop/mobile layouts, Dashboard/Inventory/profile navigation and the unchanged full preview. These are development smoke checks, not Phase E/E1 or release acceptance.
+Run `pnpm test:config`, `pnpm test:history` and `pnpm build`. In the browser, verify 12 Go backups across four devices, three per device filter, actual Vue configuration links and external Compare links. Use only the new supervisor's stop-api/start-api to verify unavailable/Retry, stale configuration UUID 404 and explicit history Refresh recovery. Check desktop/mobile layouts, Dashboard/Inventory/profile navigation and the unchanged full preview. These are development smoke checks, not Phase E/E1 or release acceptance.
+
+## Native Backup History
+
+- Open `#/backups` or `#/backups?device=core-sw-01`. The reactive device filter is URL-backed; Back/Forward and reload retain its scope. Requests use the existing API client, cancellation composable and Go Inventory/history endpoints. No new proxy path, backend, database migration or dependency is needed.
+- All-device history aggregates current metadata from Go Inventory and each corresponding device history. Filtering reads only the selected device's history while retaining all device options. Dashboard shares the same collection loader. An unknown filter preserves the native device-profile 404; successful but inconsistent metadata is rejected without inventing HTTP status codes.
+- Cards show actual device identity, UTC timestamp, UUID, SHA-256 metadata, configuration type, saved byte size and demo seed source. The hash is labeled Go metadata here; opening Saved Configuration separately verifies received content bytes. No snapshot content request is needed to list history.
+- View Configuration opens native Vue with the exact device/UUID. Compare opens the unchanged full preview with two saved UUIDs from the same device. No legacy fixture or browser-memory backup is mixed into this history.
+- Loading and errors clear previous records. Empty, 401/403, 404 and unavailable states do not show partial histories or substitute fixtures. Retry and Refresh history request current records; a Go restart generates new UUIDs. Existing configuration deep links retain their stale UUID and fail 404 until Refresh versions is explicitly chosen.
+- This screen has no create/delete action and does not persist review or configuration changes. Tokens remain exclusively in the existing server-side Node bridge.

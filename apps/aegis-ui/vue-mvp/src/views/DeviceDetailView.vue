@@ -21,8 +21,8 @@ const facts=computed(()=>data.value?[
 const configuration=computed(()=>props.tab==='configuration');
 const path=computed(()=>'#/devices/'+encodeURIComponent(props.id));
 const links=computed(()=>[
-  {label:'Backup History',description:'Persisted metadata and synthetic snapshots',icon:'archive',href:previewLink('/backups?'+new URLSearchParams({device:props.id}))},
-  {label:'Change Review',description:'Go Diff evidence · risk not evaluated',icon:'diff',href:previewLink('/review?'+new URLSearchParams({device:props.id}))}
+  {label:'Backup History',description:'All saved versions for this device · native Vue',icon:'archive',href:'#/backups?'+new URLSearchParams({device:props.id}),external:false},
+  {label:'Change Review',description:'Go Diff evidence · risk not evaluated',icon:'diff',href:previewLink('/review?'+new URLSearchParams({device:props.id})),external:true}
 ]);
 </script>
 
@@ -36,7 +36,7 @@ const links=computed(()=>[
     <SavedConfiguration v-if="configuration" :device-id="id" :backup-id="backupId"/>
     <section v-else class="detail-grid">
       <article class="card"><header class="card-head"><div><h2>Device profile</h2><p>Native Go Inventory record · disposable SQLite.</p></div><span class="tiny-tag">DEMO / UNVERIFIED</span></header><dl class="facts-grid"><div v-for="[label,value] in facts" :key="label"><dt>{{ label }}</dt><dd>{{ value }}</dd></div></dl><div class="detail-note"><AppIcon name="lock"/>Live connections, credentials and configuration writes are disabled.</div></article>
-      <article class="card"><header class="card-head"><div><h2>Continue with this device</h2><p>Saved Configuration is native Vue; the full history and review remain in the existing preview.</p></div></header><div class="feature-links"><a :href="path+'?tab=configuration'"><AppIcon name="code"/><span>Saved Configuration<small>Read the latest saved synthetic Go snapshot here</small></span><AppIcon name="arrow"/></a><a v-for="link in links" :key="link.label" :href="link.href" target="_blank" rel="noopener noreferrer"><AppIcon :name="link.icon"/><span>{{ link.label }}<small>{{ link.description }}</small></span><AppIcon name="external"/></a></div></article>
+      <article class="card"><header class="card-head"><div><h2>Continue with this device</h2><p>Saved Configuration and Backup History are native Vue; Change Review opens the full preview.</p></div></header><div class="feature-links"><a :href="path+'?tab=configuration'"><AppIcon name="code"/><span>Saved Configuration<small>Read the latest saved synthetic Go snapshot here</small></span><AppIcon name="arrow"/></a><a v-for="link in links" :key="link.label" :href="link.href" :target="link.external?'_blank':undefined" :rel="link.external?'noopener noreferrer':undefined"><AppIcon :name="link.icon"/><span>{{ link.label }}<small>{{ link.description }}</small></span><AppIcon :name="link.external?'external':'arrow'"/></a></div></article>
     </section>
   </template>
 </template>

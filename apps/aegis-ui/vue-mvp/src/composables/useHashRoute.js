@@ -5,7 +5,7 @@ function parse(){
   const segments=pathname.split('/').filter(Boolean),query=new URLSearchParams(search);
   let id=null;
   try{if(segments[0]==='devices'&&segments[1])id=decodeURIComponent(segments[1]);}catch{return {name:'not-found',query};}
-  const name=segments[0]==='devices'?(id?'detail':'inventory'):segments[0]==='overview'?'dashboard':'not-found';
+  const name=segments[0]==='devices'?(id?'detail':'inventory'):segments[0]==='overview'?'dashboard':segments[0]==='backups'&&segments.length===1?'backups':'not-found';
   return {name,id,query};
 }
 export function useHashRoute(){
