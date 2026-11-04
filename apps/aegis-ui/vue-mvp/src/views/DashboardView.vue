@@ -3,7 +3,7 @@ import {computed,onMounted,watch} from 'vue';
 import AppIcon from '../components/AppIcon.vue';
 import ApiEvidence from '../components/ApiEvidence.vue';
 import ApiState from '../components/ApiState.vue';
-import {getDashboard,formatDate,formatTime,savedLink,compareLink,previewLink} from '../api/go-demo.js';
+import {getDashboard,formatDate,formatTime,savedLink,compareLink} from '../api/go-demo.js';
 import {useGoResource} from '../composables/useGoResource.js';
 const emit=defineEmits(['device-count']);
 const {status,data,error,load}=useGoResource(getDashboard);
@@ -33,7 +33,7 @@ const metrics=computed(()=>data.value?[
         </section>
         <section class="card recent-backups"><header class="card-head"><div><h2>Recent Go backups</h2><p>Current persisted UUIDs · snapshots and Compare open natively in Vue.</p></div><a href="#/backups">All {{ data.backups.length }} Go backups <AppIcon name="arrow"/></a></header><div class="recent-list"><article v-for="backup in data.backups.slice(0,4)" :key="backup.id" class="recent-row" :data-backup-id="backup.id"><div class="recent-name"><span class="device-glyph"><AppIcon name="archive"/></span><div><a :href="savedLink(backup)">{{ backup.label }}</a><small><a :href="'#/devices/'+encodeURIComponent(backup.device_id)">{{ backup.device.display_name }}</a> · {{ backup.config_type }}</small></div></div><div class="recent-time">{{ formatDate(backup.created_at) }}<small>{{ formatTime(backup.created_at) }}</small></div><a class="btn btn-soft" :href="compareLink(backup,data.backups)"><AppIcon name="diff"/>Compare <AppIcon name="arrow"/></a></article><p v-if="!data.backups.length" class="empty-note">No saved Go snapshots are available.</p></div></section>
       </template>
-      <aside class="boundary-note"><AppIcon name="code"/><div><strong>Continue in the full workspace</strong><p>Backup History and Compare are native Vue. Change Review remains available in the existing preview. RISK NOT EVALUATED — DEMO / UNVERIFIED.</p></div><a :href="previewLink('/review')" target="_blank" rel="noopener noreferrer">Open Change Review <AppIcon name="external"/></a></aside>
+      <aside class="boundary-note"><AppIcon name="code"/><div><strong>Review the saved changes</strong><p>Change Review uses the same Go snapshots and native Diff. RISK NOT EVALUATED — DEMO / UNVERIFIED.</p></div><a href="#/review">Open Change Review <AppIcon name="arrow"/></a></aside>
     </template>
   </div>
 </template>

@@ -5,7 +5,7 @@ function parse(){
   const segments=pathname.split('/').filter(Boolean),query=new URLSearchParams(search);
   let id=null;
   try{if(segments[0]==='devices'&&segments[1])id=decodeURIComponent(segments[1]);}catch{return {name:'not-found',query};}
-  const name=segments[0]==='devices'?(id?'detail':'inventory'):segments[0]==='overview'?'dashboard':['backups','compare'].includes(segments[0])&&segments.length===1?segments[0]:'not-found';
+  const name=segments[0]==='devices'?(id?'detail':'inventory'):segments[0]==='overview'?'dashboard':['backups','compare','review'].includes(segments[0])&&segments.length===1?segments[0]:'not-found';
   return {name,id,query};
 }
 export function useHashRoute(){

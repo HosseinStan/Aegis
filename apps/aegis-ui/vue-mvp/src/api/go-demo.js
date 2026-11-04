@@ -140,10 +140,11 @@ export async function getDashboard(signal){
     groups:[...groups].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])),latest:backups[0]||null};
 }
 export const savedLink=b=>'#/devices/'+encodeURIComponent(b.device_id)+'?'+new URLSearchParams({tab:'configuration',backup:b.id});
+export const comparisonLink=(selection,view='compare')=>'#/'+(view==='review'?'review':'compare')+(selection.deviceId?'?'+new URLSearchParams({device:selection.deviceId,...(selection.leftId?{left:selection.leftId}:{}),...(selection.rightId?{right:selection.rightId}:{})}):'');
 export function compareLink(backup,backups){
   const versions=backups.filter(b=>b.device_id===backup.device_id),index=versions.findIndex(b=>b.id===backup.id);
   const other=versions[index+1]||versions[index-1]||backup;
-  return '#/compare?'+new URLSearchParams({device:backup.device_id,left:other.id,right:backup.id});
+  return comparisonLink({deviceId:backup.device_id,leftId:other.id,rightId:backup.id});
 }
 export const formatDate=value=>new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value));
 export const formatTime=value=>new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}).format(new Date(value))+' UTC';

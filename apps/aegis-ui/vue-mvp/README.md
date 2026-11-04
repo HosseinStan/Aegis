@@ -1,6 +1,6 @@
 # Aegis Vue MVP slice
 
-Additional Vue development frontend for Dashboard, Inventory, basic Go device profiles, native Saved Configuration, Backup History and Configuration Compare. The standalone [Node/HTML preview](../preview/README.md) is retained unchanged. No office Vue application source was supplied or assumed.
+Additional Vue development frontend for Dashboard, Inventory, basic Go device profiles, native Saved Configuration, Backup History, Configuration Compare and Change Review. The standalone [Node/HTML preview](../preview/README.md) is retained unchanged as a reference. No office Vue application source was supplied or assumed.
 
 **SYNTHETIC / DEMO — RISK NOT EVALUATED. Phase E deferred / not accepted. Production blocked.**
 
@@ -42,7 +42,7 @@ Browser HTTP GET → Vite same-origin proxy → existing authenticated Node brid
 - Vue uses Inventory list/profile, backup-history metadata and selected saved content through the existing /api/go/v1/devices routes. It imports no device or backup fixture collection and implements no mock API or Go business logic.
 - Dashboard derives counts, coverage, latest snapshot, groups and recent backup links from the actual Go responses. Loading/failure clears displayed records; Retry never substitutes fixtures.
 - Inventory has reactive search/group filters and device navigation. Basic profiles show only native Go fields, with absent software/serial information explicitly marked unavailable.
-- Saved Configuration, Backup History and Compare open natively inside Vue, including Sidebar, Dashboard and device shortcuts. The standalone modal Snapshot Viewer and Change Review remain available in the full existing preview. External links use the same Node origin and current Go UUIDs.
+- All core read-only screens, including Change Review, open natively inside Vue through the Sidebar, Dashboard and device shortcuts. The complete standalone frontend, including its modal Snapshot Viewer, remains available through the explicit full-preview link.
 - Vue components and composables own rendering, requests, cancellation and reactive state. The old app.js is not wrapped, imported or copied into the application.
 - Only the public Node origin is bundled. Go credentials and tokens remain exclusively in the existing supervisor/bridge process; no browser token, localStorage or sessionStorage is used.
 - No SSH, live configuration endpoint, production database, device operation, backup write or discovery is added. The existing mock-only backend, RBAC, seeds and read-only bridge are unchanged.
@@ -59,7 +59,7 @@ Browser HTTP GET → Vite same-origin proxy → existing authenticated Node brid
 
 ## Focused checks
 
-Run `pnpm test:config`, `pnpm test:history`, `pnpm test:compare` and `pnpm build`. In the browser, verify 12 Go backups across four devices, three per device filter and native Vue configuration/Compare links. Compare synthetic revision 2 to revision 3 (+2/-2), identical selections (0/0), exact native Unified text, Side-by-side, Swap and Changes Only. Use only the new supervisor's stop-api/start-api to verify unavailable/Retry, stale UUID 404 and explicit Refresh recovery. Check desktop/mobile layouts, Dashboard/Inventory/profile navigation and the unchanged full preview. These are development smoke checks, not Phase E/E1 or release acceptance.
+Run `pnpm test:config`, `pnpm test:history`, `pnpm test:compare`, `pnpm test:review` and `pnpm build`. In the browser, verify 12 Go backups across four devices, three per device filter and native Vue configuration/Compare/Review links. Compare synthetic revision 2 to revision 3 (+2/-2), identical selections (0/0), exact native Unified text, Side-by-side, Swap and Changes Only. Verify that Viewed resets on ordered pair/device changes and reload. Use only the new supervisor's stop-api/start-api to verify unavailable/Retry, stale UUID 404 and explicit Refresh recovery. Check desktop/mobile layouts, Dashboard/Inventory/profile navigation and the unchanged full preview. These are development smoke checks, not Phase E/E1 or release acceptance.
 
 ## Native Backup History
 
@@ -79,3 +79,13 @@ Run `pnpm test:config`, `pnpm test:history`, `pnpm test:compare` and `pnpm build
 - The existing cancellation/sequence composable prevents late old requests from overwriting new selections. Canonical URLs retain the exact selected UUIDs across navigation/reload. Retry retains explicit selections, including stale 404s after Go restart. **Refresh snapshots** explicitly clears the pair, reloads current history and chooses its current previous/latest IDs. Loading/errors clear rendered content.
 - Vite adds only an anchored native Diff path, retaining all previous narrow proxy routes. The same middleware rejects non-GET Diff and snapshot-content requests before forwarding, in both dev and preview. No broad `/api` proxy, Go/RBAC change or browser bearer token is introduced.
 - Empty, 401/403, 404 and unavailable states are explicit. This is saved synthetic change evidence, not live state, a security assessment, approval or persisted audit record. The full standalone frontend and backend are unchanged.
+
+## Native Change Review
+
+- Open `#/review`, `#/review?device=core-sw-01` or `#/review?device=:id&left=:uuid&right=:uuid`. Device Details opens the selected device's review; Compare opens the exact current ordered pair. Review links back to native Compare and each selected Saved Configuration without changing their UUIDs.
+- `ChangeReviewView.vue` and `ConfigurationCompareView.vue` compose one `SavedComparisonWorkspace.vue`. The existing selectors, Swap, cancellation, route synchronization, error states, native diff presentation and metadata renderer were extracted from Compare instead of copied into a second implementation. Both use the unchanged `getConfigurationComparison` and `native-diff.js` validation/presentation.
+- Review shows actual Go identity/group, synthetic disabled mock status, before/after UUIDs and UTC timestamps, native changed/count results, SHA-256 verification evidence and HTTP request IDs. Loading/errors clear old evidence. No inventory/history fixture is substituted.
+- The prominent **RISK NOT EVALUATED — DEMO / UNVERIFIED** notice applies even while loading or unavailable. This screen visualizes saved configuration differences only. It produces no severity, compliance, vulnerability, approval or security recommendation result. PR #9 is not integrated.
+- **Viewed in this demo — not approved or persisted** is an optional `ref` scoped to the component. `useDemoViewed` resets it on any change to the exact device/before/after tuple, including Swap and returning to a previous pair. Reload/remount creates a fresh false value. It uses no storage, request or backend audit/review record; presentation changes for the same pair retain it.
+- Retry preserves explicit UUIDs. After a Go restart, stale IDs return native 404 with no replacement content. Refresh snapshots explicitly reloads the current history and selects current previous/latest versions. Empty inventory/history, 401/403 and unavailable handling share the Compare implementation.
+- No new API endpoint, proxy route, backend service, migration, permission, dependency or write operation is introduced. Go/Node and the standalone reference preview remain unchanged.

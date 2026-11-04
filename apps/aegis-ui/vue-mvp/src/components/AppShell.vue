@@ -13,7 +13,6 @@ function shortcut(event){
 }
 onMounted(()=>window.addEventListener('keydown',shortcut));
 onBeforeUnmount(()=>window.removeEventListener('keydown',shortcut));
-const remaining=[{label:'Change Review',route:'/review',icon:'code'}];
 </script>
 
 <template>
@@ -28,10 +27,7 @@ const remaining=[{label:'Change Review',route:'/review',icon:'code'}];
         <a href="#/devices" :class="{active:active==='inventory'||active==='detail'}" :aria-current="active==='inventory'||active==='detail'?'page':undefined" aria-label="Device inventory"><AppIcon name="server"/><span class="nav-text">Device inventory</span><span class="nav-count">{{ deviceCount??'—' }}</span></a>
         <a href="#/backups" :class="{active:active==='backups'}" :aria-current="active==='backups'?'page':undefined" aria-label="Backup History"><AppIcon name="archive"/><span class="nav-text">Backup History</span></a>
         <a href="#/compare" :class="{active:active==='compare'}" :aria-current="active==='compare'?'page':undefined" aria-label="Configuration Compare"><AppIcon name="diff"/><span class="nav-text">Configuration Compare</span></a>
-      </nav>
-      <div class="nav-label secondary-label">EXISTING PREVIEW</div>
-      <nav aria-label="Full workspace in existing preview">
-        <a v-for="item in remaining" :key="item.route" :href="previewLink(item.route)" target="_blank" rel="noopener noreferrer" :aria-label="item.label+' — existing preview, opens a new tab'" :title="item.label+' · existing preview'"><AppIcon :name="item.icon"/><span class="nav-text">{{ item.label }}</span><AppIcon class="external-icon" name="external"/></a>
+        <a href="#/review" :class="{active:active==='review'}" :aria-current="active==='review'?'page':undefined" aria-label="Change Review"><AppIcon name="code"/><span class="nav-text">Change Review</span></a>
       </nav>
       <div class="sidebar-note"><div><AppIcon name="lock"/> A contained workspace</div><p>Explore freely.<br>Live device access is off.</p><span>● LOCAL DEMO</span></div>
       <a class="full-preview" :href="previewLink()" target="_blank" rel="noopener noreferrer"><AppIcon name="external"/><span>Open full existing preview</span></a>

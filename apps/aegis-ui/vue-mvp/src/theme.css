@@ -280,6 +280,43 @@ select{border:1px solid var(--border);border-radius:6px;background:#fff;padding:
 .compare-evidence-grid dt,.compare-request dt{font-size:9px;color:#8a9b7c;margin:14px 0 6px}
 .compare-evidence-grid dd,.compare-request dd{font-size:10px;color:#648252;margin:0;line-height:1.9;overflow-wrap:anywhere}
 .compare-evidence-grid code{font:10px/1.9 Consolas,monospace}
+.review-boundary{display:flex;align-items:flex-start;gap:12px;padding:17px 20px;border:1px solid #d4e2c4;border-radius:10px;background:#edf4e5;margin-bottom:20px;color:#5a7848}
+.review-boundary>.icon{margin-top:2px}
+.review-boundary>div{min-width:0}
+.review-boundary strong{font-size:11px;line-height:1.8;letter-spacing:.2px}
+.review-boundary p{font-size:10px;line-height:1.9;color:#819475;margin:6px 0 0}
+.review-overview{margin:0 0 21px}
+.review-device{display:flex;align-items:center;gap:13px;padding:20px 21px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.review-device>div{min-width:0;flex:1}
+.review-device>div>a{font-size:14px;font-weight:600;color:#4f7442}
+.review-device p{font-size:10px;color:#8a9b7c;line-height:1.9;margin:5px 0 0;overflow-wrap:anywhere}
+.review-device>.btn{font-size:10px}
+.review-evidence{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;padding:23px 21px}
+.review-evidence>div{min-width:0}
+.review-evidence .eyebrow{display:block;font-size:8px;letter-spacing:1.1px}
+.review-evidence code{display:block;font:11px/1.9 "Cascadia Code",Consolas,monospace;color:#5e7b4e;overflow-wrap:anywhere}
+.review-evidence time{display:block;font-size:10px;color:#889b78;line-height:1.8;margin:9px 0}
+.review-evidence a{font-size:10px;color:#5c7e49}
+.review-outcome h2{font-size:13px;margin-bottom:13px}
+.review-outcome>div{display:flex;gap:8px;flex-wrap:wrap}
+.review-outcome p{font-size:9px;color:#889b78;line-height:1.9;margin:12px 0 0}
+.review-viewed{padding:17px 21px;background:#f6f9f0;border-top:1px solid var(--border)}
+.review-viewed label{display:flex;gap:8px;align-items:flex-start;font-size:11px;color:#6c885a;line-height:1.8;cursor:pointer}
+.review-viewed input{accent-color:#00856a;flex-shrink:0;margin-top:4px}
+.review-viewed p{font-size:9px;color:#8a9b7c;line-height:1.9;margin:7px 0 0 24px}
+@media(max-width:1150px){.review-evidence{grid-template-columns:repeat(2,minmax(0,1fr))}.review-outcome{grid-column:1/-1}}
+@media(max-width:700px){
+  .review-boundary{padding:15px;gap:9px}
+  .review-boundary strong{font-size:10px}
+  .review-device{padding:17px;gap:11px}
+  .review-device>div{flex-basis:calc(100% - 47px)}
+  .review-device>.btn{width:100%;font-size:10px}
+  .review-evidence{grid-template-columns:minmax(0,1fr);gap:21px;padding:19px 17px}
+  .review-outcome{grid-column:auto}
+  .review-evidence code{font-size:10px}
+  .review-viewed{padding:15px 17px}
+  .review-viewed label{font-size:10px}
+}
 @media(max-width:700px){
   .compare-controls{grid-template-columns:minmax(0,1fr);padding:17px;gap:13px}
   .compare-controls .compare-device{grid-column:auto}
