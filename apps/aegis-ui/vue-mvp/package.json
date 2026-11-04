@@ -10,6 +10,7 @@
     "build": "vite build",
     "test:config": "node --test tests/saved-configuration.test.mjs",
     "test:history": "node --test tests/backup-history.test.mjs",
+    "test:compare": "node --test tests/configuration-compare.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": { "vue": "3.5.44" },

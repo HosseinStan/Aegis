@@ -58,8 +58,8 @@ test('View links preserve exact Vue UUID; Compare uses only same-device saved ID
   mock();const result=await getBackupWorkspace(null,signal()),chosen=result.backups[0];
   const view=new URL('http://127.0.0.1/'+savedLink(chosen));
   assert.ok(view.hash.includes('/devices/'+chosen.device_id+'?tab=configuration&backup='+chosen.id));
-  const compare=new URL(compareLink(chosen,result.backups)),query=new URLSearchParams(compare.hash.split('?')[1]);
-  assert.equal(compare.origin,'http://127.0.0.1:1234');assert.equal(query.get('device'),chosen.device_id);assert.equal(query.get('right'),chosen.id);
+  const compare=new URL('http://127.0.0.1/'+compareLink(chosen,result.backups)),query=new URLSearchParams(compare.hash.split('?')[1]);
+  assert.ok(compare.hash.startsWith('#/compare?'));assert.equal(compare.origin,'http://127.0.0.1');assert.equal(query.get('device'),chosen.device_id);assert.equal(query.get('right'),chosen.id);
   assert.ok(result.backups.some(b=>b.device_id===chosen.device_id&&b.id===query.get('left')));
 });
 test('Dashboard still derives 4 / 12 / 100% / 3 from the shared collection',async()=>{

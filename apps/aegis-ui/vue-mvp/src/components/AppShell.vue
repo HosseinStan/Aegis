@@ -13,7 +13,7 @@ function shortcut(event){
 }
 onMounted(()=>window.addEventListener('keydown',shortcut));
 onBeforeUnmount(()=>window.removeEventListener('keydown',shortcut));
-const remaining=[{label:'Compare configurations',route:'/compare',icon:'diff'},{label:'Change Review',route:'/review',icon:'code'}];
+const remaining=[{label:'Change Review',route:'/review',icon:'code'}];
 </script>
 
 <template>
@@ -27,6 +27,7 @@ const remaining=[{label:'Compare configurations',route:'/compare',icon:'diff'},{
         <a href="#/overview" :class="{active:active==='dashboard'}" :aria-current="active==='dashboard'?'page':undefined" aria-label="Overview"><AppIcon name="dashboard"/><span class="nav-text">Overview</span></a>
         <a href="#/devices" :class="{active:active==='inventory'||active==='detail'}" :aria-current="active==='inventory'||active==='detail'?'page':undefined" aria-label="Device inventory"><AppIcon name="server"/><span class="nav-text">Device inventory</span><span class="nav-count">{{ deviceCount??'—' }}</span></a>
         <a href="#/backups" :class="{active:active==='backups'}" :aria-current="active==='backups'?'page':undefined" aria-label="Backup History"><AppIcon name="archive"/><span class="nav-text">Backup History</span></a>
+        <a href="#/compare" :class="{active:active==='compare'}" :aria-current="active==='compare'?'page':undefined" aria-label="Configuration Compare"><AppIcon name="diff"/><span class="nav-text">Configuration Compare</span></a>
       </nav>
       <div class="nav-label secondary-label">EXISTING PREVIEW</div>
       <nav aria-label="Full workspace in existing preview">

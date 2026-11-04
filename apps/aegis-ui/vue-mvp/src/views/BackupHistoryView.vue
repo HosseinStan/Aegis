@@ -29,10 +29,10 @@ function filterDevice(event){location.hash='/backups'+(event.target.value?'?'+ne
         <article v-for="backup in data.backups" :key="backup.id" class="card history-card" :data-backup-id="backup.id" :data-device-id="backup.device_id">
           <header class="history-card-head"><span class="device-glyph"><AppIcon name="archive"/></span><div><a :href="'#/devices/'+encodeURIComponent(backup.device_id)">{{ backup.device.display_name }}</a><p><time :datetime="backup.created_at" :title="backup.created_at">{{ formatDate(backup.created_at) }} · {{ formatTime(backup.created_at) }}</time></p></div><span class="tiny-tag">SYNTHETIC</span></header>
           <div class="history-body"><h2>{{ backup.label||'Saved running configuration' }}</h2><dl class="history-metadata"><div><dt>Snapshot UUID</dt><dd><code>{{ backup.id }}</code></dd></div><div><dt>SHA-256 · Go metadata</dt><dd><code>{{ backup.content_hash }}</code></dd></div><div class="history-properties"><div><dt>Configuration type</dt><dd>{{ backup.config_type }}</dd></div><div><dt>Saved size</dt><dd>{{ backup.size_bytes }} bytes</dd></div><div><dt>Source</dt><dd>Go · {{ backup.trigger_type }}</dd></div></div></dl></div>
-          <footer class="history-actions"><a class="btn btn-primary" :href="savedLink(backup)"><AppIcon name="code"/>View Configuration</a><a class="btn" :href="compareLink(backup,data.backups)" target="_blank" rel="noopener noreferrer" :aria-label="'Compare '+backup.id+' in the full preview'"><AppIcon name="diff"/>Compare<AppIcon name="external"/></a></footer>
+          <footer class="history-actions"><a class="btn btn-primary" :href="savedLink(backup)"><AppIcon name="code"/>View Configuration</a><a class="btn" :href="compareLink(backup,data.backups)" :aria-label="'Compare '+backup.id+' in Vue'"><AppIcon name="diff"/>Compare<AppIcon name="arrow"/></a></footer>
         </article>
       </section>
-      <p class="history-footnote">DEMO / UNVERIFIED · Snapshot content opens natively in Vue. Compare opens the full existing preview with actual Go UUIDs. No creation, deletion or live device access.</p>
+      <p class="history-footnote">DEMO / UNVERIFIED · Snapshot content opens natively in Vue. Compare opens natively in Vue with actual Go UUIDs. No creation, deletion or live device access.</p>
     </template>
   </div>
 </template>

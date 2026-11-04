@@ -6,7 +6,7 @@ examples are maintained in [`docs/vue-integration.md`](../../docs/vue-integratio
 Explore the [standalone MVP preview](preview/README.md) with synthetic demo data.
 
 The additional [Vue MVP slice](vue-mvp/README.md) implements Dashboard,
-Inventory, basic device profiles, Saved Configuration and Backup History against the same isolated Go demo. It is
+Inventory, basic device profiles, Saved Configuration, Backup History and native Configuration Compare against the same isolated Go demo. It is
 an additional development frontend while the full standalone preview retains
 Saved Configuration, Backup History, native Compare and Change Review.
 

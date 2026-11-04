@@ -11,11 +11,14 @@ if(origin.protocol!=='http:'||origin.hostname!=='127.0.0.1'||!origin.port||origi
 const target=origin.origin;
 const snapshotPath='^/api/go/v1/devices/[a-zA-Z0-9-]+/backups/[a-zA-Z0-9-]+(?:\\?.*)?$';
 const snapshotPattern=new RegExp(snapshotPath);
+const diffPath='^/api/go/v1/devices/[a-zA-Z0-9-]+/backups/[a-zA-Z0-9-]+/diff/[a-zA-Z0-9-]+(?:\\?.*)?$';
+const diffPattern=new RegExp(diffPath);
 function snapshotGetOnly(server){
   server.middlewares.use((req,res,next)=>{
-    if(snapshotPattern.test(req.url||'')&&req.method!=='GET'){
+    const diff=diffPattern.test(req.url||'');
+    if((snapshotPattern.test(req.url||'')||diff)&&req.method!=='GET'){
       res.writeHead(405,{'Allow':'GET','Content-Type':'application/json; charset=utf-8'});
-      res.end(JSON.stringify({error:{code:'READ_ONLY_SNAPSHOT_PROXY',message:'Saved snapshot content supports GET only.'}}));return;
+      res.end(JSON.stringify({error:{code:diff?'READ_ONLY_DIFF_PROXY':'READ_ONLY_SNAPSHOT_PROXY',message:'Saved snapshot content and native Diff support GET only.'}}));return;
     }
     next();
   });
@@ -23,7 +26,8 @@ function snapshotGetOnly(server){
 // Reuse the authenticated bridge, not a new API or database reader.
 const proxy={
   '^/api/go/v1/devices(?:/[a-zA-Z0-9-]+)?(?:/backups)?(?:\\?.*)?$':{target,changeOrigin:true,ws:false},
-  [snapshotPath]:{target,changeOrigin:true,ws:false}
+  [snapshotPath]:{target,changeOrigin:true,ws:false},
+  [diffPath]:{target,changeOrigin:true,ws:false}
 };
 const headers={
   'X-Content-Type-Options':'nosniff',
