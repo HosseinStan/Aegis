@@ -18,6 +18,34 @@ The private external store/cache avoids modifying an existing dependency cache. 
 
 ## Launch
 
+### One-command Windows workspace
+
+Use **PowerShell 7.3+ on Windows x64**, an existing Node 22.13+ installation, the pinned pnpm 11.25.0, installed pinned Vue dependencies and the already verified Go 1.26.10 Windows SDK. Nothing is installed or downloaded by this launcher; system PATH is never changed.
+
+Copy [local-tools.example.json](local-tools.example.json) **outside Git** and fill in the six existing absolute local paths. It contains tool/cache locations only; never put passwords, tokens or application configuration in it. `moduleCacheSeed` is an already available Go module cache containing the versions in go.sum. `runtimeRoot` must be fresh and outside every Git checkout; subsequent launches reuse its matching ownership marker.
+
+From a terminal, run one command (replace the three absolute paths with your existing PowerShell, clone and tools file):
+
+```powershell
+& 'C:/Tools/PowerShell/pwsh.exe' -NoProfile -File 'C:/AegisDemo/repo/apps/aegis-ui/vue-mvp/start-local.ps1' -ToolsFile 'C:/AegisDemo/local-tools.json'
+```
+
+Click the actual Vue HTTP URL printed after **AEGIS LOCAL DEMO — READY**. Keep this terminal open. **Ctrl+C or Q** stops this session's Vue, Node supervisor and Go child; it never searches for or kills other processes by name or port. Existing occupied ports are left alone: all three services bind to 127.0.0.1 using OS-allocated free ports. Do not open index.html through file://.
+
+- The PowerShell entrypoint compiles a small in-memory .NET Windows Job host. The trusted Node helper waits on stdin until it is assigned to that unnamed, non-breakaway Job. All later descendants inherit it. Normal stop requests graceful shutdown; a 20-second stop deadline and kill-on-Job-close reap only this session's remaining descendants. If Job assignment fails, startup fails without a containment fallback. No administrator installation is needed. See [Windows Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects).
+- The existing run-go-demo.mjs is reused unchanged. Its credentials/bootstrap and JWT remain private to its existing pipes/bridge. Only the actual public Node origin is supplied to Vite. Existing Vite routes, GET restrictions and CSP remain unchanged; inherited VITE_* variables and dotenv loading are disabled for this isolated launch.
+- Node/pnpm versions, exact Vue package pins and the installed lockfile receipt are checked. The approved Go executable SHA-256, official cached ZIP SHA-256 and SDK version are checked against the existing 1.26.10 receipt. The SDK and package contents must come from those trusted local preparations; this developer launcher is not a hostile-user sandbox or a full installation attestation.
+- Go tools use process-scoped GOTOOLCHAIN=local, GOPROXY=off, -mod=readonly, CGO_ENABLED=0 and private external caches. The dependency seed is copied, never modified. Interrupted copies stay unpublished in their session directory. The fixed target is **./cmd/inventory-demo**, never cmd/server. First build verifies cached modules; later launches reuse the binary only when its SHA-256 receipt, toolchain, build flags and current application Go/embed/module inputs agree. Cache drift fails rather than silently restoring files.
+- Binaries, Go/Vite caches, temporary files and fresh disposable databases are under the external owned runtime. Session launch.json contains public origins, PIDs and lifecycle/build-reuse status only. No credentials or private bootstrap are written. Retained session data is not automatically deleted.
+- READY requires real Go readiness, authenticated bridge reads of four disabled mock devices and twelve unique synthetic snapshots, a served Vue entrypoint, and matching actual snapshot UUIDs through Vue's same-origin proxy. A startup/service failure stops the session without fixture fallback.
+- One active launch is allowed per runtime root. A second concurrent launch fails with SESSION_LOCKED and leaves the first alone. After a hard host termination, inspect any stale lock manually or choose a fresh external runtime; the launcher never kills a recorded PID or auto-cleans an unknown directory.
+
+Missing tools, packages, offline dependencies or an unsafe/foreign runtime produce a specific error. Prepare missing dependencies manually from the existing frozen offline cache using the instructions above; the launcher deliberately does not install them. Run `pnpm test:launcher` for focused contract/cache tests. Ctrl+C, Q, occupied-port isolation, failure cleanup and binary reuse also require the focused Windows smoke check.
+
+**PR #11 is not merged or cherry-picked here.** PR #10's Go/CI/Docker pins remain unchanged; using local Go 1.26.10 does not establish that PR #10 passed GitHub CI. Phase E remains deferred / not accepted and production blocked.
+
+### Per-service launch for troubleshooting
+
 Start the unchanged isolated Go/Node supervisor from the separate development clone, using the existing verified Go 1.26.10 demo binary and a fresh external disposable parent:
 
 ```text

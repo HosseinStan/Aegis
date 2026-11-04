@@ -12,6 +12,7 @@
     "test:history": "node --test tests/backup-history.test.mjs",
     "test:compare": "node --test tests/configuration-compare.test.mjs",
     "test:review": "node --test tests/change-review.test.mjs",
+    "test:launcher": "node --test tests/local-launcher.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": { "vue": "3.5.44" },
