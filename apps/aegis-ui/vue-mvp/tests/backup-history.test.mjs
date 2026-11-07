@@ -60,7 +60,13 @@ test('View links preserve exact Vue UUID; Compare uses only same-device saved ID
   assert.ok(view.hash.includes('/devices/'+chosen.device_id+'?tab=configuration&backup='+chosen.id));
   const compare=new URL('http://127.0.0.1/'+compareLink(chosen,result.backups)),query=new URLSearchParams(compare.hash.split('?')[1]);
   assert.ok(compare.hash.startsWith('#/compare?'));assert.equal(compare.origin,'http://127.0.0.1');assert.equal(query.get('device'),chosen.device_id);assert.equal(query.get('right'),chosen.id);
-  assert.ok(result.backups.some(b=>b.device_id===chosen.device_id&&b.id===query.get('left')));
+  const versions=result.backups.filter(b=>b.device_id===chosen.device_id);
+  assert.equal(query.get('left'),versions[1].id);
+  const oldest=versions.at(-1);
+  const oldestCompare=new URL('http://127.0.0.1/'+compareLink(oldest,result.backups));
+  const oldestQuery=new URLSearchParams(oldestCompare.hash.split('?')[1]);
+  assert.equal(oldestQuery.get('left'),oldest.id);
+  assert.equal(oldestQuery.get('right'),versions.at(-2).id);
 });
 test('Dashboard still derives 4 / 12 / 100% / 3 from the shared collection',async()=>{
   mock();const result=await getDashboard(signal());assert.equal(result.devices.length,4);assert.equal(result.backups.length,12);assert.equal(result.coverage,100);assert.equal(result.groups.length,3);

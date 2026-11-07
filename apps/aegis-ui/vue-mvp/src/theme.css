@@ -12,10 +12,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[t
 .skip-link{position:fixed;left:20px;top:-70px;z-index:100;padding:12px;background:#fff;border:2px solid var(--green)}
 .skip-link:focus{top:12px}
 .shell{min-height:100vh}
-.sidebar{position:fixed;inset:0 auto 0 0;width:246px;z-index:20;display:flex;flex-direction:column;padding:31px 20px 0;background:#102823;color:#a7bcb3}
+.sidebar{position:fixed;inset:0 auto 0 0;width:246px;z-index:20;display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#638071 #102823;padding:31px 20px 0;background:#102823;color:#a7bcb3}
 .brand{display:flex;gap:12px;align-items:center;color:#fff;padding-left:11px;font-size:25px;font-weight:740;letter-spacing:3px}
 .brand-icon{font-size:47px;line-height:1;color:#d0ff85}
-.brand small{display:block;font-size:8px;letter-spacing:2.4px;color:#9ab3a7;margin-top:4px}
+.brand small{display:block;font-size:8px;letter-spacing:2.4px;color:#9ab3a7;margin-top:4px;white-space:nowrap}
 .workspace{display:flex;gap:9px;align-items:center;padding:13px 8px;margin:30px 0 25px;border:1px solid #2b443a;border-radius:9px;color:#e1eae6;font-size:11px;font-weight:600}
 .workspace-avatar{display:grid;place-items:center;width:30px;height:32px;background:#2d493c;border-radius:6px;color:#d0ff85;font-size:15px}
 .workspace small{display:block;font-size:10px;color:#839f92;margin-top:5px;font-weight:400}

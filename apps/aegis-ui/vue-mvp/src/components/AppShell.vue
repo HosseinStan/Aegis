@@ -4,7 +4,7 @@ import AppIcon from './AppIcon.vue';
 import {previewLink} from '../api/go-demo.js';
 defineProps({active:String,breadcrumb:String,deviceCount:{default:null}});
 const search=ref(''),searchInput=ref(null);
-function searchDevices(){location.hash='/devices?'+new URLSearchParams({q:search.value});}
+defineEmits(['search']);
 function skipToContent(){document.getElementById('vue-main')?.focus();}
 function shortcut(event){
   if(event.key==='/'&&!['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName)){
@@ -36,7 +36,7 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',shortcut));
     <div class="workspace-main">
       <header class="topbar">
         <div class="breadcrumbs"><span>Workspace</span><span>/</span><strong>{{ breadcrumb }}</strong></div>
-        <form class="global-search" role="search" @submit.prevent="searchDevices"><AppIcon name="search"/><input ref="searchInput" v-model="search" aria-label="Find a device" placeholder="Find a device…"><kbd>/</kbd></form>
+        <form class="global-search" role="search" @submit.prevent="$emit('search',search.trim())"><AppIcon name="search"/><input ref="searchInput" v-model="search" aria-label="Find a device" placeholder="Find a device…"><kbd>/</kbd></form>
       </header>
       <div class="demo-banner"><span class="tiny-tag">VUE PREVIEW</span><span>DEMO — SYNTHETIC DATA — RISK NOT EVALUATED</span><a :href="previewLink()" target="_blank" rel="noopener noreferrer">Full existing preview <AppIcon name="external"/></a></div>
       <main id="vue-main" tabindex="-1"><slot/></main>

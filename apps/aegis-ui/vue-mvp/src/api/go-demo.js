@@ -143,8 +143,9 @@ export const savedLink=b=>'#/devices/'+encodeURIComponent(b.device_id)+'?'+new U
 export const comparisonLink=(selection,view='compare')=>'#/'+(view==='review'?'review':'compare')+(selection.deviceId?'?'+new URLSearchParams({device:selection.deviceId,...(selection.leftId?{left:selection.leftId}:{}),...(selection.rightId?{right:selection.rightId}:{})}):'');
 export function compareLink(backup,backups){
   const versions=backups.filter(b=>b.device_id===backup.device_id),index=versions.findIndex(b=>b.id===backup.id);
-  const other=versions[index+1]||versions[index-1]||backup;
-  return comparisonLink({deviceId:backup.device_id,leftId:other.id,rightId:backup.id});
+  const older=versions[index+1],newer=versions[index-1];
+  const before=older||backup,after=older?backup:newer||backup;
+  return comparisonLink({deviceId:backup.device_id,leftId:before.id,rightId:after.id});
 }
 export const formatDate=value=>new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value));
 export const formatTime=value=>new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'}).format(new Date(value))+' UTC';

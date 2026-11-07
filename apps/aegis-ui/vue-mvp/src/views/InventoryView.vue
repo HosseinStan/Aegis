@@ -5,9 +5,12 @@ import ApiEvidence from '../components/ApiEvidence.vue';
 import ApiState from '../components/ApiState.vue';
 import {getDevices,INVENTORY_SOURCE} from '../api/go-demo.js';
 import {useGoResource} from '../composables/useGoResource.js';
-const props=defineProps({query:{type:String,default:''}}),emit=defineEmits(['device-count']);
+const props=defineProps({query:{type:String,default:''},searchRevision:Number}),emit=defineEmits(['device-count']);
 const search=ref(props.query),group=ref('all');
-watch(()=>props.query,value=>search.value=value);
+watch([()=>props.query,()=>props.searchRevision],([query])=>{
+  search.value=query;
+  group.value='all';
+});
 const {status,data,error,load}=useGoResource(getDevices);
 watch([status,data],()=>emit('device-count',status.value==='ready'?data.value.devices.length:null));
 onMounted(()=>load());
