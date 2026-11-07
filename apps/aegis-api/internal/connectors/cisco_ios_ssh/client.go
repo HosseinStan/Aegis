@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ type Client struct {
 	HandshakeTimeout time.Duration
 	CommandTimeout   time.Duration
 	MaxOutputBytes   int64
+	pins             map[netip.AddrPort]ssh.PublicKey
 }
 
 func New(knownHostsFile string, connectTimeout, handshakeTimeout, commandTimeout time.Duration, maxOutputBytes int64) (*Client, error) {
@@ -30,6 +32,61 @@ func New(knownHostsFile string, connectTimeout, handshakeTimeout, commandTimeout
 		return nil, errors.New("SSH limits must be positive")
 	}
 	return &Client{KnownHostsFile: knownHostsFile, ConnectTimeout: connectTimeout, HandshakeTimeout: handshakeTimeout, CommandTimeout: commandTimeout, MaxOutputBytes: maxOutputBytes}, nil
+}
+
+// NewPinned creates a Lab connector that rejects destinations without a
+// configured key before dialing. An empty map authorizes no connections.
+func NewPinned(pins map[netip.AddrPort]ssh.PublicKey, connectTimeout, handshakeTimeout, commandTimeout time.Duration, maxOutputBytes int64) (*Client, error) {
+	if len(pins) > 2 || connectTimeout <= 0 || handshakeTimeout <= 0 || commandTimeout <= 0 || maxOutputBytes <= 0 {
+		return nil, errors.New("invalid Lab SSH limits")
+	}
+	c := &Client{ConnectTimeout: connectTimeout, HandshakeTimeout: handshakeTimeout, CommandTimeout: commandTimeout, MaxOutputBytes: maxOutputBytes, pins: make(map[netip.AddrPort]ssh.PublicKey, len(pins))}
+	for target, key := range pins {
+		ip := target.Addr()
+		if !target.IsValid() || target.Port() == 0 || ip.Zone() != "" || ip.Is4In6() || ip.IsUnspecified() || ip.IsMulticast() || key == nil {
+			return nil, errors.New("invalid Lab SSH target or host key")
+		}
+		c.pins[target] = key
+	}
+	return c, nil
+}
+
+func (c *Client) Approved(d domain.Device) bool {
+	_, ok := c.pins[deviceTarget(d)]
+	return ok
+}
+
+func deviceTarget(d domain.Device) netip.AddrPort {
+	ip, err := netip.ParseAddr(d.ManagementIP)
+	if err != nil || ip.Zone() != "" || d.ManagementPort < 1 || d.ManagementPort > 65535 {
+		return netip.AddrPort{}
+	}
+	return netip.AddrPortFrom(ip.Unmap(), uint16(d.ManagementPort))
+}
+
+func (c *Client) dialPolicy(device domain.Device) (string, ssh.HostKeyCallback, error) {
+	if c.pins != nil {
+		target := deviceTarget(device)
+		key, ok := c.pins[target]
+		if !ok {
+			return "", nil, domain.ErrForbidden
+		}
+		verify := ssh.FixedHostKey(key)
+		return target.String(), func(hostname string, remote net.Addr, presented ssh.PublicKey) error {
+			if err := verify(hostname, remote, presented); err != nil {
+				return fmt.Errorf("%w: host key did not match its Lab pin", domain.ErrHostKey)
+			}
+			return nil
+		}, nil
+	}
+	if _, err := os.Stat(c.KnownHostsFile); err != nil {
+		return "", nil, fmt.Errorf("%w: known-hosts file: %v", domain.ErrHostKey, err)
+	}
+	callback, err := knownhosts.New(c.KnownHostsFile)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: load known-hosts: %v", domain.ErrHostKey, err)
+	}
+	return net.JoinHostPort(device.ManagementIP, fmt.Sprintf("%d", device.ManagementPort)), callback, nil
 }
 
 func (c *Client) TestConnection(ctx context.Context, device domain.Device, credential domain.Credential) error {
@@ -111,19 +168,15 @@ func (c *Client) execute(ctx context.Context, device domain.Device, credential d
 }
 
 func (c *Client) dial(ctx context.Context, device domain.Device, credential domain.Credential) (*ssh.Client, error) {
-	if _, err := os.Stat(c.KnownHostsFile); err != nil {
-		return nil, fmt.Errorf("%w: known-hosts file: %v", domain.ErrHostKey, err)
-	}
-	hostKeyCallback, err := knownhosts.New(c.KnownHostsFile)
+	address, hostKeyCallback, err := c.dialPolicy(device)
 	if err != nil {
-		return nil, fmt.Errorf("%w: load known-hosts: %v", domain.ErrHostKey, err)
+		return nil, err
 	}
 	authMethod, err := sshAuthMethod(credential)
 	if err != nil {
 		return nil, err
 	}
 	configuration := &ssh.ClientConfig{User: credential.Username, Auth: []ssh.AuthMethod{authMethod}, HostKeyCallback: hostKeyCallback, Timeout: c.HandshakeTimeout}
-	address := net.JoinHostPort(device.ManagementIP, fmt.Sprintf("%d", device.ManagementPort))
 	netConn, err := (&net.Dialer{Timeout: c.ConnectTimeout}).DialContext(ctx, "tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", domain.ErrConnection, err)

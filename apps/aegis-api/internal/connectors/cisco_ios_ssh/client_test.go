@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,4 +148,43 @@ func serveFakeCisco(connection net.Conn, config *ssh.ServerConfig, runningConfig
 			}
 		}()
 	}
+}
+
+func TestLabPinnedConnectorRejectsUnapprovedEndpointsAndWrongKeys(t *testing.T) {
+	server := newFakeCiscoServer(t, "hostname SYNTHETIC-LAB\nend\n")
+	target := netip.MustParseAddrPort(server.address)
+	device := domain.Device{ManagementIP: target.Addr().String(), ManagementPort: int(target.Port())}
+	credential := domain.Credential{AuthType: "password", Username: "aegis", Password: "device-password"}
+	ctx := context.Background()
+
+	blocked, err := NewPinned(nil, time.Second, time.Second, time.Second, 1024)
+	require.NoError(t, err)
+	require.False(t, blocked.Approved(device))
+	require.ErrorIs(t, blocked.TestConnection(ctx, device, credential), domain.ErrForbidden)
+	_, err = blocked.GetRunningConfig(ctx, device, credential)
+	require.ErrorIs(t, err, domain.ErrForbidden)
+
+	wrong, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	signer, err := ssh.NewSignerFromKey(wrong)
+	require.NoError(t, err)
+	client, err := NewPinned(map[netip.AddrPort]ssh.PublicKey{target: signer.PublicKey()}, time.Second, time.Second, time.Second, 1024)
+	require.NoError(t, err)
+	require.ErrorIs(t, client.TestConnection(ctx, device, credential), domain.ErrHostKey)
+
+	pins := map[netip.AddrPort]ssh.PublicKey{target: server.hostKey.PublicKey()}
+	client, err = NewPinned(pins, time.Second, time.Second, time.Second, 1024)
+	require.NoError(t, err)
+	delete(pins, target)
+	require.True(t, client.Approved(device))
+	require.NoError(t, client.TestConnection(ctx, device, credential))
+	result, err := client.GetRunningConfig(ctx, device, credential)
+	require.NoError(t, err)
+	require.Contains(t, result.Config, "hostname SYNTHETIC-LAB")
+	if device.ManagementPort == 65535 {
+		device.ManagementPort--
+	} else {
+		device.ManagementPort++
+	}
+	require.ErrorIs(t, client.TestConnection(ctx, device, credential), domain.ErrForbidden)
 }
