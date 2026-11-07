@@ -1,0 +1,8 @@
+{
+  "nodeExe": "C:/Tools/node/node.exe",
+  "pnpmCjs": "C:/Tools/pnpm/bin/pnpm.cjs",
+  "goRoot": "C:/Tools/go1.26.10/go",
+  "goArchive": "C:/Tools/go1.26.10/go1.26.10.windows-amd64.zip",
+  "moduleCacheSeed": "C:/AegisDemo/existing-offline-module-cache",
+  "runtimeRoot": "C:/AegisDemo/vue-workspace-runtime"
+}
