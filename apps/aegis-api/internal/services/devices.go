@@ -32,9 +32,15 @@ func NewDeviceService(repository repositories.DeviceRepository, credentialStore 
 }
 
 func (s *DeviceService) Create(ctx context.Context, d domain.Device) (domain.Device, error) {
+	d.Enabled = true
+	return s.Register(ctx, d)
+}
+
+// Register persists an explicitly selected initial state. Lab callers derive
+// Enabled from their destination policy rather than accepting it from HTTP.
+func (s *DeviceService) Register(ctx context.Context, d domain.Device) (domain.Device, error) {
 	d = normalizeDevice(d)
 	d.ID = uuid.NewString()
-	d.Enabled = true
 	d.CreatedAt = time.Now().UTC()
 	d.UpdatedAt = d.CreatedAt
 	if err := s.validate(ctx, d); err != nil {
