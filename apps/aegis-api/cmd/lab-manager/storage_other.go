@@ -12,9 +12,9 @@ func privateDir(string, bool) error {
 }
 
 func lockInstance(*os.File) error {
-	return errors.New("Windows file locking is required")
+	return errors.New("the Lab requires Windows file locking")
 }
 
 func protectKey([]byte, bool) ([]byte, error) {
-	return nil, errors.New("Windows DPAPI is required")
+	return nil, errors.New("the Lab requires Windows DPAPI")
 }

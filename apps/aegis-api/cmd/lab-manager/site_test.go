@@ -44,7 +44,7 @@ func TestLabPermissionsPersistenceAndStorageGate(t *testing.T) {
 		require.NoError(t, err)
 		return store, vault, newLabSite(host, login, manager, os.DirFS(dir)).routes()
 	}
-	store, vault, site := open()
+	store, _, site := open()
 	request := func(method, path, requestOrigin string, body any, cookie *http.Cookie, status int) *httptest.ResponseRecorder {
 		var raw io.Reader
 		if body != nil {
@@ -165,7 +165,7 @@ func TestLabPermissionsPersistenceAndStorageGate(t *testing.T) {
 	request("GET", devices+"/"+second.ID+"/backups/test-backup-one", "", nil, viewer, 404)
 
 	require.NoError(t, store.Close())
-	store, vault, site = open()
+	store, vault, site := open()
 	defer store.Close()
 	request("GET", devices, "", nil, operator, 401)
 	viewer = signIn("viewer")

@@ -25,15 +25,15 @@ func openLabStorage(path string) (labStorage, error) {
 	path = filepath.Clean(path)
 	parent := filepath.Dir(path)
 	if !filepath.IsAbs(path) || parent == path || strings.ContainsAny(path, "?#") || strings.HasPrefix(path, `\\`) {
-		return result, errors.New("Lab data directory must be an absolute local path")
+		return result, errors.New("the Lab data directory must be an absolute local path")
 	}
 	resolved, err := filepath.EvalSymlinks(parent)
 	if err != nil || !strings.EqualFold(resolved, parent) {
-		return result, errors.New("Lab parent must already exist without symlinks or junctions")
+		return result, errors.New("the Lab parent must already exist without symlinks or junctions")
 	}
 	for current := path; ; current = filepath.Dir(current) {
 		if _, err := os.Lstat(filepath.Join(current, ".git")); !errors.Is(err, os.ErrNotExist) {
-			return result, errors.New("Lab storage must be outside Git checkouts")
+			return result, errors.New("the Lab storage must be outside Git checkouts")
 		}
 		if current == filepath.Dir(current) {
 			break

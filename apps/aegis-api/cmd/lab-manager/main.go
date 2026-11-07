@@ -147,19 +147,19 @@ func loadPins(path string) (map[netip.AddrPort]ssh.PublicKey, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil || decoder.Decode(new(any)) != io.EOF || len(input.Targets) < 1 || len(input.Targets) > 2 {
-		return nil, errors.New("Lab approvals must contain one or two target/host-key entries")
+		return nil, errors.New("the Lab approvals must contain one or two target/host-key entries")
 	}
 	for _, item := range input.Targets {
 		target, err := netip.ParseAddrPort(item.Address)
 		if err != nil || target.Addr().Is4In6() || target.Addr().Zone() != "" || target.Port() == 0 || pins[target] != nil {
-			return nil, errors.New("Lab approvals require unique literal IP:port targets")
+			return nil, errors.New("the Lab approvals require unique literal IP:port targets")
 		}
 		key, _, options, rest, err := ssh.ParseAuthorizedKey([]byte(strings.TrimSpace(item.HostKey)))
 		if err != nil || len(options) != 0 || len(strings.TrimSpace(string(rest))) != 0 || strings.ContainsAny(strings.TrimSpace(item.HostKey), "\r\n") {
 			return nil, errors.New("each Lab approval requires one independently verified SSH public key")
 		}
 		if _, certificate := key.(*ssh.Certificate); certificate {
-			return nil, errors.New("Lab pins require plain SSH host public keys")
+			return nil, errors.New("the Lab pins require plain SSH host public keys")
 		}
 		pins[target] = key
 	}
