@@ -107,3 +107,21 @@ jobs:
           finally { $archive.Dispose() }
           Write-Output "Verified archive SHA256=$actual"
           Write-Output "Verified go.exe SHA256=$exeHash"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Install Windows frozen Vue dependencies
+        working-directory: apps/aegis-ui/vue-mvp
+        shell: pwsh
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify installed Windows pnpm lockfile matches tracked content
+        working-directory: apps/aegis-ui/vue-mvp
+        shell: pwsh
+        run: |
+          node --test tests/local-launcher.test.mjs
+          node --input-type=module -e "import {readFile} from 'node:fs/promises'; import {samePnpmLockContent} from './launcher/lockfile-integrity.mjs'; const source=await readFile('pnpm-lock.yaml'); const installed=await readFile('node_modules/.pnpm/lock.yaml'); if (!samePnpmLockContent(source,installed)) throw Error('VUE_LOCK_MISMATCH'); console.log('AEGIS_WINDOWS_LOCK_INTEGRITY_PASS');"
+

@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {mkdtemp,mkdir,writeFile,readFile,access,rm} from 'node:fs/promises';
 import {parseTools,localOrigin,validateInventory,validateBackups,parseGoPackages,copyOfflineCache} from '../launcher/workspace.mjs';
+import {samePnpmLockContent} from '../launcher/lockfile-integrity.mjs';
 
 const root=path.resolve('local-launcher-unit-only');
 const tools=Object.fromEntries(['nodeExe','pnpmCjs','goRoot','goArchive','moduleCacheSeed','runtimeRoot'].map(key=>[key,path.join(root,key)]));
@@ -54,4 +55,22 @@ test('cancelled cache preparation publishes nothing; a later session can prepare
 test('cache publication rejects a destination outside the owned runtime before writing',async()=>{
   const controller=new AbortController();
   await assert.rejects(copyOfflineCache('unused',path.join(root,'runtime'),path.join(root,'elsewhere'),controller.signal),/RUNTIME_PATH_UNSAFE/);
+});
+
+test('pnpm lockfile integrity allows only cross-platform line endings, not dependency drift',async()=>{
+  const source=await readFile(path.resolve(import.meta.dirname,'../pnpm-lock.yaml'));
+  const text=source.toString('utf8');
+  assert(!text.includes('\uFEFF'),'The tracked lockfile must not contain a BOM');
+  assert.equal(samePnpmLockContent(source,source),true);
+  const unix=text.replace(/\r\n/g,'\n');
+  const windows=Buffer.from(unix.replace(/\n/g,'\r\n'),'utf8');
+  assert.equal(samePnpmLockContent(source,windows),true,'CRLF on Windows must not invalidate a frozen install');
+  assert.equal(samePnpmLockContent(source,Buffer.from(unix.replace(/\n$/,''))),true,'One final newline may differ');
+  const tampered=unix.replace('specifier: 3.5.44','specifier: 3.5.45');
+  assert.notEqual(tampered,unix,'test must change an actual version');
+  assert.equal(samePnpmLockContent(source,Buffer.from(tampered)),false,'Dependency version drift must fail');
+  assert.equal(samePnpmLockContent(source,Buffer.from(unix+'\nextra: true\n')),false,'Additional YAML entries must fail');
+  assert.equal(samePnpmLockContent(source,Buffer.from('\uFEFF'+unix)),false,'Unexpected BOM must fail');
+  assert.equal(samePnpmLockContent(source,Buffer.from(unix.replace(/\n/,'\r'))),false,'Lone CR must fail');
+  assert.equal(samePnpmLockContent(source,Buffer.from([0xff])),false,'Invalid UTF-8 must fail');
 });

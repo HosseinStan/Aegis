@@ -5,6 +5,7 @@ import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
+import {samePnpmLockContent} from './lockfile-integrity.mjs';
 
 const GO_EXE_SHA='c0ea949d000a24883f37b1dd2db794a9fb2b824fbcff11facb469615a50ca6af';
 const GO_ZIP_SHA='71ae086f0137e665f855a811cc119152b6a783e0bbc1b906e709f46d80141eb0';
@@ -107,7 +108,7 @@ async function main(){
       let installed;try{installed=require(pkg+'/package.json').version;}catch{fail('VUE_DEPENDENCIES_MISSING','Prepare the pinned local Vue packages from the lockfile offline before launch; automatic installation is disabled.');}
       if(installed!==version)fail('VUE_DEPENDENCIES_MISMATCH','Installed '+pkg+' does not match its exact pinned version.');
     }
-    if(digest(await readFile(path.join(vueRoot,'pnpm-lock.yaml')))!==digest(await readFile(path.join(vueRoot,'node_modules/.pnpm/lock.yaml'))))fail('VUE_LOCK_MISMATCH','Installed dependencies do not match the frozen lockfile.');
+    if(!samePnpmLockContent(await readFile(path.join(vueRoot,'pnpm-lock.yaml')),await readFile(path.join(vueRoot,'node_modules/.pnpm/lock.yaml'))))fail('VUE_LOCK_MISMATCH','Installed dependencies do not match the frozen lockfile (except permitted CRLF / terminal newline normalization).');
     await externalRoot(tools.runtimeRoot);
     if(within(repoRoot,tools.runtimeRoot)||within(tools.runtimeRoot,repoRoot))fail('RUNTIME_PATH_UNSAFE','Use an external runtime directory separate from the source checkout.');
     const owner={schema:1,repoRoot:repoRoot.toLowerCase()};
