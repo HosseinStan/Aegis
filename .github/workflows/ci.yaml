@@ -82,6 +82,7 @@ jobs:
   windows-sdk-receipt:
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Verify official Go 1.26.11 Windows archive and derive binary SHA-256
         shell: pwsh
         run: |
