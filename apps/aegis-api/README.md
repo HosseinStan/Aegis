@@ -37,7 +37,7 @@ operation, or unregistered destination endpoint.
 
 ## Local setup
 
-Requirements: Go 1.26.9 or a compatible newer Go 1.26 release.
+Requirements: Go 1.26.11 or a compatible newer Go 1.26 release.
 
 1. Copy `.env.example` values into your shell or a local uncommitted `.env`.
    The application intentionally does not auto-load `.env` in production.
