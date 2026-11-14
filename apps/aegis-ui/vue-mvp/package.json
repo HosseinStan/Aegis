@@ -1,0 +1,23 @@
+{
+  "name": "@aegis/vue-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test:config": "node --test tests/saved-configuration.test.mjs",
+    "test:history": "node --test tests/backup-history.test.mjs",
+    "test:compare": "node --test tests/configuration-compare.test.mjs",
+    "test:review": "node --test tests/change-review.test.mjs",
+    "test:launcher": "node --test tests/local-launcher.test.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": { "vue": "3.5.44" },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.10",
+    "vite": "8.3.5"
+  }
+}

@@ -20,3 +20,9 @@ These are development branches, **not merged releases**. The current launcher ex
 ## What a reviewer should see once validated
 
 A dashboard, device inventory, saved configuration, backup history, native comparison and change-review screens. These operate on synthetic records only. Risk classification remains unverified and production release is blocked. A future tagged preview should provide an accurate reproducible launch script and screenshots from that same validated build.
+
+### Synthetic Vue demo integration candidate
+
+[PR #17](https://github.com/HosseinStan/Aegis/pull/17) is an independent development branch based on the Apache-2.0 and Go 1.26.11 main baseline. It carries the isolated synthetic Go/Node/Vue demo from PR #10 but leaves the older PR #10/#12 branches unchanged. The Go application does not connect to switches in this demo entrypoint.
+
+**Important:** The Windows one-command launcher inherited an exact Go 1.26.10 executable-and-archive receipt. It must **not** be used against the new Go 1.26.11 toolchain until both digests are independently checked and the launcher pin is updated; the Windows CI receipt job is intended to produce that evidence. The CLI-based isolated preview remains a separate documented evaluation path. No public deployment or production use is authorized.

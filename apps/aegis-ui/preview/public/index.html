@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#102823"><title>Aegis · Network workspace</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css"><script type="module" src="/app.js"></script></head>
+<body>
+<p class="server-required" role="note">Open Aegis using the local Node/Go supervisor and its http://127.0.0.1 URL. Opening public/index.html directly with file:// does not start the application. No dependency installation is required.</p>
+<div class="shell">
+<aside class="sidebar">
+<a class="brand" href="#/overview" aria-label="Aegis overview"><span class="brand-icon">✳</span><span>AEGIS<small>NETWORK WORKSPACE</small></span></a>
+<div class="workspace"><span class="workspace-avatar">G</span><span>Isolated Go workspace<small>Disposable synthetic data</small></span><span class="workspace-dot"></span></div>
+<div class="nav-label">WORKSPACE</div>
+<nav aria-label="Main navigation">
+<a href="#/overview" data-nav="overview"><span data-icon="dashboard"></span>Overview</a>
+<a href="#/devices" data-nav="devices"><span data-icon="server"></span>Device inventory<span class="nav-count" id="inventory-count">—</span></a>
+<a href="#/backups" data-nav="backups"><span data-icon="archive"></span>Configuration backups</a>
+<a href="#/compare" data-nav="compare"><span data-icon="diff"></span>Compare configurations</a>
+<a href="#/review" data-nav="review"><span data-icon="code"></span>Change Review<span class="review-nav-tag">Go</span></a>
+</nav>
+<div class="sidebar-note"><div class="note-mark"><span data-icon="lock"></span> A contained workspace</div><p>Explore freely.<br>Live device access is off.</p><span class="local-pill"><i></i> LOCAL DEMO</span></div>
+<button class="sidebar-help" data-action="about"><span data-icon="help"></span>About this preview<span data-icon="arrow-up-right"></span></button>
+<div class="sidebar-user"><span class="avatar">DM</span><span>Demo viewer<small>Read-only workspace</small></span><span data-icon="chevron"></span></div>
+</aside>
+<div class="workspace-main">
+<header class="topbar"><div class="breadcrumbs"><span>Workspace</span><span>/</span><strong id="breadcrumb">Overview</strong></div><div class="topbar-right"><label class="global-search"><span data-icon="search"></span><input id="global-search" placeholder="Find a device…" aria-label="Find a device"><kbd>/</kbd></label><button class="icon-button" data-action="activity" aria-label="Open Go backup history"><span data-icon="archive"></span></button><span class="topbar-divider"></span><span class="avatar avatar-light">DM</span></div></header>
+<div class="demo-banner"><span class="demo-label">PREVIEW</span><span>DEMO — SYNTHETIC DATA — RISK NOT EVALUATED <strong>· No live connections.</strong></span><button data-action="about">About this preview <span data-icon="arrow-up-right"></span></button></div>
+<main id="main" tabindex="-1"><div class="loading">Opening your workspace…</div></main>
+<footer class="page-footer"><span><i></i> Local preview · Synthetic data only</span><span>Phase E deferred · Production release blocked</span></footer>
+</div></div>
+<div id="toast" role="status" aria-live="polite"></div><div id="modal-root"></div>
+</body></html>

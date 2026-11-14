@@ -36,3 +36,62 @@ jobs:
         run: go build ./...
       - name: Build container
         run: docker build -f apps/aegis-api/Dockerfile -t aegis-api:ci .
+
+  vue-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+          cache-dependency-path: apps/aegis-ui/vue-mvp/pnpm-lock.yaml
+      - name: Install frozen Vue dependencies
+        working-directory: apps/aegis-ui/vue-mvp
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Unit tests for Vue read-only views and local launcher
+        working-directory: apps/aegis-ui/vue-mvp
+        run: |
+          pnpm test:config
+          pnpm test:history
+          pnpm test:compare
+          pnpm test:review
+          pnpm test:launcher
+      - name: Build synthetic Vue demo
+        working-directory: apps/aegis-ui/vue-mvp
+        env:
+          AEGIS_PREVIEW_ORIGIN: http://127.0.0.1:4318
+        run: pnpm build
+
+  windows-sdk-receipt:
+    runs-on: windows-latest
+    steps:
+      - name: Verify official Go 1.26.11 Windows archive and derive binary SHA-256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = '71ae086f0137e665f855a811cc119152b6a783e0bbc1b906e709f46d80141eb0'
+          $zipPath = Join-Path $env:RUNNER_TEMP 'go1.26.11.windows-amd64.zip'
+          Invoke-WebRequest -Uri 'https://go.dev/dl/go1.26.11.windows-amd64.zip' -OutFile $zipPath
+          $actual = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'Official Go archive checksum mismatch' }
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $entry = $archive.GetEntry('go/bin/go.exe')
+            if ($null -eq $entry) { throw 'go.exe not found inside verified archive' }
+            $stream = $entry.Open()
+            try {
+              $sha = [System.Security.Cryptography.SHA256]::Create()
+              try { $exeHash = [Convert]::ToHexString($sha.ComputeHash($stream)).ToLowerInvariant() }
+              finally { $sha.Dispose() }
+            }
+            finally { $stream.Dispose() }
+          }
+          finally { $archive.Dispose() }
+          Write-Output "Verified archive SHA256=$actual"
+          Write-Output "Verified go.exe SHA256=$exeHash"
