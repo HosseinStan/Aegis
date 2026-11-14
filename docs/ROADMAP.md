@@ -9,18 +9,18 @@ This roadmap distinguishes implemented baseline code from work preserved in draf
 
 ## Next: shareable local developer evaluation
 
-- Review and integrate the Go 1.26.10 security update in [PR #11](https://github.com/HosseinStan/Aegis/pull/11) once validated.
+- Review and integrate the tested Go 1.26.11 security update in [PR #14](https://github.com/HosseinStan/Aegis/pull/14). It supersedes the earlier Go 1.26.10 draft in PR #11.
 - Reconcile and validate the synthetic-device Go/Vue MVP in [PR #10](https://github.com/HosseinStan/Aegis/pull/10).
 - Validate the lab device manager in stacked [PR #12](https://github.com/HosseinStan/Aegis/pull/12) independently of corporate networks, maintaining explicit SSH allowlists and host-key verification.
 - Publish reproducible synthetic fixtures, a demonstration walkthrough, and an honest pre-release once the necessary checks pass.
 
 ## Open-source readiness gates
 
-1. Confirm copyright ownership and authorization for all code and materials.
-2. Choose and publish an approved OSI-compatible license; replace the placeholder `LICENSE` only after authorization.
-3. Audit Git history and public fixtures for secrets, confidential topology, and third-party materials.
-4. Establish a working private vulnerability reporting process and clear external contribution rules.
-5. Invite genuine outside tests and feedback without making claims about adoption until evidenced.
+1. **Maintainer confirmed** personal ownership of Aegis; check attribution for any third-party or generated artifacts before publishing releases.
+2. **Approved, not merged:** Apache-2.0 and a `NOTICE` file in [draft PR #15](https://github.com/HosseinStan/Aegis/pull/15). Publish only after final integration review.
+3. **In progress:** Audit all public branches/history and synthetic fixtures for secrets, confidential topology, and third-party materials; existing spot checks are not a comprehensive audit.
+4. **Enabled and user-verified:** GitHub private vulnerability reporting. Keep `SECURITY.md` and public issue intake aligned.
+5. **Planned:** Invite genuine outside tests and feedback without implying existing adoption.
 
 ## Later: production-readiness work
 

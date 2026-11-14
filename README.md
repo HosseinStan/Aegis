@@ -4,7 +4,7 @@
 
 Aegis is an early-stage Go-based infrastructure-management project with a JSON API for approved Cisco IOS/IOS XE devices. It aims to help teams inspect device configurations and understand changes without exposing a generic device command or configuration-write interface.
 
-> **Project status:** Source code is publicly viewable, but the current `LICENSE` is a placeholder and grants **no permission to redistribute or reuse the code**. Aegis is **not yet an open-source release**. Legal ownership and licensing must be resolved before distributing it as OSS. Production use is not approved.
+> **Project status:** Aegis remains pre-release and **production use is not approved**. The maintainer has selected Apache-2.0 in [draft PR #15](https://github.com/HosseinStan/Aegis/pull/15), but the default branch still contains a placeholder license; this is **not yet a licensed open-source release**. Phase E remains deferred.
 
 ## Why Aegis?
 
@@ -27,7 +27,7 @@ These features are implemented for a defined milestone; they do **not** imply ac
 | --- | --- | --- |
 | Go-backed Vue dashboard, inventory, backups, and change review | [PR #10](https://github.com/HosseinStan/Aegis/pull/10) | Draft; not on `main` |
 | Isolated local lab device manager | [PR #12](https://github.com/HosseinStan/Aegis/pull/12) | Draft; stacked on PR #10 |
-| Go toolchain security patch | [PR #11](https://github.com/HosseinStan/Aegis/pull/11) | Draft; review before integration |
+| Go 1.26.11 security update | [PR #14](https://github.com/HosseinStan/Aegis/pull/14) | Draft; CI passed; supersedes outdated Go 1.26.10 proposal in PR #11 |
 | Deterministic change-risk development snapshot | [PR #9](https://github.com/HosseinStan/Aegis/pull/9) | Deferred; not accepted |
 
 **Phase E remains DEFERRED / NOT ACCEPTED. Production release remains BLOCKED.** A passing CI run is not a substitute for production security and hardware acceptance.
@@ -55,7 +55,9 @@ Browsers do not connect directly to switches. There is no Telnet client, arbitra
 3. From `apps/aegis-api`, run `go run ./cmd/setup-local` where supported. On Windows, use `scripts/development/start-local.cmd` from the repository root.
 4. Open the development-only evaluation console at `http://127.0.0.1:8080/test-console/`, or use the authenticated API. Do not enable the test console in production.
 
-For Docker Compose, authentication, Swagger, and examples see [apps/aegis-api/README.md](apps/aegis-api/README.md). To assess API behavior without a physical switch, start with the mocked connector integration tests. The richer synthetic-device Vue demo is documented in the draft PRs above, not released on `main`.
+The original Go 1.26.9 pin on `main` has known standard-library advisories; prefer the validated Go 1.26.11 patch in draft PR #14 and do not treat baseline CI as production approval.
+
+For Docker Compose, authentication, Swagger, and examples see [apps/aegis-api/README.md](apps/aegis-api/README.md). To assess API behavior without a physical switch, start with the mocked connector integration tests. The richer synthetic-device Vue demo is documented in [the demo status guide](docs/DEMO.md) and the draft PRs above, not released on `main`.
 
 ## Development checks
 
@@ -76,8 +78,8 @@ Read [SECURITY.md](SECURITY.md), [API security assumptions](apps/aegis-api/SECUR
 
 ## Contributing and roadmap
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and the [roadmap](docs/ROADMAP.md). External code contributions cannot be accepted under an open-source license until the ownership and licensing decisions are resolved. Security vulnerabilities must not be disclosed in public issues.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [roadmap](docs/ROADMAP.md). A licensing change is approved and proposed in draft PR #15, but the default branch is still unlicensed; external redistribution and code contributions must wait for publication of the license and contribution policy. Security vulnerabilities must not be disclosed in public issues.
 
 ## License
 
-**No open-source license has been granted yet.** The current [LICENSE](LICENSE) file explicitly reserves redistribution rights. Do not assume public GitHub visibility permits copying, modification, or distribution.
+The maintainer has chosen **Apache License 2.0**, proposed with a copyright notice in [draft PR #15](https://github.com/HosseinStan/Aegis/pull/15). The default branch's existing [LICENSE](LICENSE) is still a restrictive placeholder until that PR is merged. Public visibility does not imply redistribution rights. This section must be updated after the license merge.

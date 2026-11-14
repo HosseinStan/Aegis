@@ -2,13 +2,13 @@
 
 Thank you for your interest in making infrastructure configuration review safer.
 
-> **Licensing gate:** Aegis has not yet been released under an open-source license. Its current `LICENSE` does not grant redistribution or reuse rights. Please do not submit external code contributions until the maintainers publish a confirmed contribution and licensing policy.
+> **Licensing gate:** The maintainer approved Apache-2.0 in draft [PR #15](https://github.com/HosseinStan/Aegis/pull/15), but the default branch's existing `LICENSE` does not grant redistribution or reuse rights. Please wait until that change is merged and the public contribution policy is finalized before contributing code.
 
 ## Before opening an issue
 
 - Check the [README](README.md) and [roadmap](docs/ROADMAP.md) for current versus draft capabilities.
 - Describe the device model or platform generically. Do not include customer names, real configuration text, keys, passwords, live IP addresses, or internal network identifiers.
-- For possible security vulnerabilities, **do not file a public exploit report**. See [SECURITY.md](SECURITY.md); a functioning private reporting channel must be established before public intake of security reports.
+- For possible security vulnerabilities, **do not file a public exploit report**. Use the active [GitHub private vulnerability reporting channel](https://github.com/HosseinStan/Aegis/security/advisories) described in [SECURITY.md](SECURITY.md).
 
 ## Developer workflow (for authorized maintainers)
 
@@ -26,4 +26,4 @@ make check
 
 ## Planned public contribution process
 
-After licensing and authorization are resolved, maintainers intend to add reproducible development fixtures, first-issue guidance, and PR/issue templates. This section is a plan, not a claim that outside contributions are currently accepted.
+Issue and pull-request templates are provided to help structure non-sensitive public reports. Once the license has merged and the maintainer has completed the remaining disclosure/acceptance review, contribution guidelines can be opened to external code. No existing third-party contribution or adoption is implied.

@@ -10,13 +10,12 @@ NOT ACCEPTED, and production release remains BLOCKED.
 configurations, credentials, or customer information in a public GitHub issue,
 pull request, or discussion.**
 
-The maintainer is preparing GitHub's **private vulnerability reporting**
-feature. Once the maintainer confirms it is enabled, go to the repository's
-Security / Advisories page and select **Report a vulnerability** to file a
-confidential report. Until that workflow is enabled and verified, this
-repository does not claim to have a functioning public-facing private
-vulnerability intake channel. Please do not publish security-sensitive report
-details while an appropriate channel is being established.
+**GitHub private vulnerability reporting is enabled and was verified by the
+repository maintainer on 2026-11-14.** To submit a confidential report, use
+[Security Advisories](https://github.com/HosseinStan/Aegis/security/advisories)
+and select **Report a vulnerability** from an eligible non-maintainer account.
+The repository administrator may see a different advisory management view.
+Do not submit a test or sensitive report through a public issue.
 
 Maintainer setup instructions:
 https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository
