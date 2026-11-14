@@ -1,6 +1,6 @@
 module company.local/aegis/apps/aegis-api
 
-go 1.26.9
+go 1.26.11
 
 require (
 	github.com/getkin/kin-openapi v0.145.0
