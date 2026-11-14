@@ -6,7 +6,7 @@ Dashboard, Inventory, device profiles, saved Configuration, Backup History, snap
 
 ## Run the isolated Go-backed preview
 
-Use an already verified **Go 1.26.10** installation and existing Node.js. Do not launch cmd/server: that production entrypoint registers Cisco SSH connectors.
+Use an already verified **Go 1.26.11** installation and existing Node.js. Do not launch cmd/server: that production entrypoint registers Cisco SSH connectors.
 
 **Do not open public/index.html directly with file://.** Root-relative styles, JavaScript modules and the same-origin API require the HTTP server. Launch the existing Node/Go supervisor below and open its printed **http://127.0.0.1:<port>/** URL in the browser. No npm install or other dependency installation is required. If the stylesheet/server is missing, the HTML includes a plain launch reminder; it is hidden during normal HTTP use.
 
@@ -120,10 +120,10 @@ Inventory shows **Aegis Go API — Isolated Demo**, actual GET paths/status and 
 
 ## Minimal validation and limits
 
-For the Change Review milestone, Node syntax checks, focused existing HTTP reads, native change counts/identical/404 checks, browser selection and Compare links, desktop/narrow layouts and a controlled Go stop/start verify the visible flow. The unchanged, previously built Go 1.26.10 demo binary is reused; no backend build or dependency change is needed. Dashboard, Inventory, saved Configuration, Backup History, Content and native Diff remain usable. These checks are not Phase E, race, capacity, performance or release validation.
+For the Change Review milestone, Node syntax checks, focused existing HTTP reads, native change counts/identical/404 checks, browser selection and Compare links, desktop/narrow layouts and a controlled Go stop/start verify the visible flow. For this candidate, build the isolated demo entrypoint with verified Go 1.26.11 before running the preview; the earlier local demo evidence predates this Go toolchain update. Dashboard, Inventory, saved Configuration, Backup History, Content and native Diff remain usable. These checks are not Phase E, race, capacity, performance or release validation.
 
 No real SSH, external device addresses, credential handling, production database, discovery or configuration changes are enabled.
 
-Known CI issue reported by independent review: **GO-2026-6809** in **Go 1.26.9**, fixed in **Go 1.26.10**. The local demo uses the verified 1.26.10 toolchain. Repository-wide go.mod/CI/Docker correction remains a separate task; this change does not alter those files or disable govulncheck.
+This integration candidate keeps the updated **Go 1.26.11** go.mod, CI and Docker baseline already merged into main, addressing reported GO-2026-6809 and GO-2026-6859 standard-library issues. The Go CI vulnerability scan is enabled; full production release acceptance is still deferred.
 
 **Phase E: DEFERRED / NOT ACCEPTED. Production release: BLOCKED.** Historical E1 Go cases passed their executed scenarios, but Controller acceptance failed. No merge/deployment, Phase F or Task #7 acceptance is granted.

@@ -6,8 +6,8 @@ import {createInterface} from 'node:readline';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
-const GO_EXE_SHA='de14a33fd6ab5937941f0573e5b6537f04d24979aaf1b0557de1005a28cb7add';
-const GO_ZIP_SHA='7ecd2d7260e82c59bcbd7f1077a07cee2dea607295b858df67195a1e4e09629b';
+const GO_EXE_SHA='c0ea949d000a24883f37b1dd2db794a9fb2b824fbcff11facb469615a50ca6af';
+const GO_ZIP_SHA='71ae086f0137e665f855a811cc119152b6a783e0bbc1b906e709f46d80141eb0';
 const SOURCE='Aegis Go API — Isolated Demo',BACKUPS='Aegis Go API — Disposable SQLite Demo';
 const fail=(code,message)=>{throw new Error(code+': '+message);};
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -100,7 +100,7 @@ async function main(){
     if(major<22||major===22&&minor<13)fail('NODE_VERSION_UNSUPPORTED','Node 22.13 or newer is required. No installation is performed.');
     for(const name of ['pnpmCjs','goArchive'])if(!(await lstat(tools[name])).isFile())fail('TOOLS_MISSING','An existing '+name+' file is required.');
     const goExe=path.join(tools.goRoot,'bin/go.exe');
-    if(digest(await readFile(goExe))!==GO_EXE_SHA||digest(await readFile(tools.goArchive))!==GO_ZIP_SHA||!(await readFile(path.join(tools.goRoot,'VERSION'),'utf8')).startsWith('go1.26.10\n'))fail('GO_TRUST_FAILED','Select the existing approved Go 1.26.10 Windows x64 SDK and official archive. No toolchain fallback or installation is allowed.');
+    if(digest(await readFile(goExe))!==GO_EXE_SHA||digest(await readFile(tools.goArchive))!==GO_ZIP_SHA||!(await readFile(path.join(tools.goRoot,'VERSION'),'utf8')).startsWith('go1.26.11\n'))fail('GO_TRUST_FAILED','Select the existing approved Go 1.26.11 Windows x64 SDK and official archive. No toolchain fallback or installation is allowed.');
     const manifest=await json(path.join(vueRoot,'package.json')),require=createRequire(path.join(vueRoot,'package.json'));
     if((await json(path.resolve(tools.pnpmCjs,'../../package.json'))).version!==manifest.packageManager.split('@').at(-1))fail('PNPM_VERSION_MISMATCH','Select the already installed pinned pnpm version.');
     for(const [pkg,version] of Object.entries({...manifest.dependencies,...manifest.devDependencies})){
@@ -132,7 +132,7 @@ async function main(){
     for(const dir of ['go-build','gopath'])await mkdir(path.join(tools.runtimeRoot,dir),{recursive:true});
     await mkdir(path.join(session,'tmp'));
     const goEnv={...baseEnv,GOENV:'off',GOWORK:'off',GOROOT:tools.goRoot,GOTOOLCHAIN:'local',GOPROXY:'off',GOFLAGS:'-mod=readonly',CGO_ENABLED:'0',GOOS:'windows',GOARCH:'amd64',GOMODCACHE:moduleCache,GOCACHE:path.join(tools.runtimeRoot,'go-build'),GOPATH:path.join(tools.runtimeRoot,'gopath'),GOTMPDIR:path.join(session,'tmp')};
-    if(await tool(goExe,['version'],goEnv,'Go version validation')!=='go version go1.26.10 windows/amd64')fail('GO_VERSION_MISMATCH','Only Go 1.26.10 is allowed.');
+    if(await tool(goExe,['version'],goEnv,'Go version validation')!=='go version go1.26.11 windows/amd64')fail('GO_VERSION_MISMATCH','Only Go 1.26.11 is allowed.');
     const apiRoot=path.join(repoRoot,'apps/aegis-api');
     // cwd is fixed to this clone's API, never a protected checkout or production entrypoint.
     const originalCwd=process.cwd();process.chdir(apiRoot);
