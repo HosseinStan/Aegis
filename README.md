@@ -4,7 +4,7 @@
 
 Aegis is an early-stage Go-based infrastructure-management project with a JSON API for approved Cisco IOS/IOS XE devices. It aims to help teams inspect device configurations and understand changes without exposing a generic device command or configuration-write interface.
 
-> **Project status:** Aegis source is offered under **Apache License 2.0** (see [LICENSE](LICENSE) and [NOTICE](NOTICE)). It is an **early-stage, pre-release development project**, not production-approved. Phase E remains deferred / not accepted. The broader Vue demo remains in draft PRs.
+> **Project status:** Aegis source is offered under **Apache License 2.0** (see [LICENSE](LICENSE) and [NOTICE](NOTICE)). It is an **early-stage, pre-release development project**, not production-approved. Phase E remains deferred / not accepted. The isolated, synthetic Go-backed Vue demo was merged to `main` in [PR #17](https://github.com/HosseinStan/Aegis/pull/17).
 
 ## Why Aegis?
 
@@ -21,13 +21,19 @@ Network configuration review is often handled with device-by-device logins or sc
 
 These features are implemented for a defined milestone; they do **not** imply acceptance for a production environment. Device-specific CLI parsing and the stated security assumptions still require validation.
 
+## Local demonstration on `main`
+
+- A **synthetic, read-only Go → Node → Vue workspace** with Dashboard, Inventory, Saved Configuration, Backup History, side-by-side and unified comparisons, and Change Review is included on `main` via [PR #17](https://github.com/HosseinStan/Aegis/pull/17).
+- Demo data comprises **four disabled mock devices and twelve disposable configuration snapshots** (three per device), not live device access. The demo entrypoint is separate from the production Go server.
+- The Windows launcher uses independently prepared tools, verified toolchain checksums, frozen pnpm dependencies, and fail-closed lockfile checks. See [demo setup and validation](docs/DEMO.md) and [Vue workspace instructions](apps/aegis-ui/vue-mvp/README.md).
+
 ## What is still under development?
 
 | Work | Where to review | Status |
 | --- | --- | --- |
-| Go-backed Vue dashboard, inventory, backups, and change review | [PR #10](https://github.com/HosseinStan/Aegis/pull/10) | Draft; not on `main` |
-| Isolated local lab device manager | [PR #12](https://github.com/HosseinStan/Aegis/pull/12) | Draft; stacked on PR #10 |
-| Go 1.26.11 security baseline | Included in this integration candidate; see [PR #14](https://github.com/HosseinStan/Aegis/pull/14) | CI verified on its original security-fix PR |
+| Public synthetic Go/Vue MVP | [PR #17](https://github.com/HosseinStan/Aegis/pull/17) | **Merged on `main`; local evaluation only** |
+| Isolated local lab device manager | [PR #12](https://github.com/HosseinStan/Aegis/pull/12) | Draft; **not** merged or hardware-accepted |
+| Go 1.26.11 security baseline | [PR #16](https://github.com/HosseinStan/Aegis/pull/16) | Merged; automated checks enabled |
 | Deterministic change-risk development snapshot | [PR #9](https://github.com/HosseinStan/Aegis/pull/9) | Deferred; not accepted |
 
 **Phase E remains DEFERRED / NOT ACCEPTED. Production release remains BLOCKED.** A passing CI run is not a substitute for production security and hardware acceptance.
@@ -55,9 +61,25 @@ Browsers do not connect directly to switches. There is no Telnet client, arbitra
 3. From `apps/aegis-api`, run `go run ./cmd/setup-local` where supported. On Windows, use `scripts/development/start-local.cmd` from the repository root.
 4. Open the development-only evaluation console at `http://127.0.0.1:8080/test-console/`, or use the authenticated API. Do not enable the test console in production.
 
-This candidate includes the Go 1.26.11 toolchain pin tested in draft PR #14. Passing CI does not indicate production security acceptance.
+The `main` branch pins Go 1.26.11, which was validated by CI. Passing CI does not indicate production security acceptance.
 
-For Docker Compose, authentication, Swagger, and examples see [apps/aegis-api/README.md](apps/aegis-api/README.md). To assess API behavior without a physical switch, start with the mocked connector integration tests. The richer synthetic-device Vue demo is documented in [the demo status guide](docs/DEMO.md) and the draft PRs above, not released on `main`.
+For Docker Compose, authentication, Swagger, and examples see [apps/aegis-api/README.md](apps/aegis-api/README.md). To assess API behavior without a physical switch, start with the mocked connector integration tests. The synthetic Go-backed Vue demonstration is included on `main`, documented in [the demo guide](docs/DEMO.md); it is not a tagged or production release yet.
+
+## Try the synthetic Vue demo locally
+
+This is an **offline-capable, localhost-only synthetic evaluation workflow**, not a connection to real switches.
+
+1. Follow [the Vue MVP prerequisites](apps/aegis-ui/vue-mvp/README.md): Windows x64, PowerShell 7.3+, Node.js 22.13+ (the verified example uses Node 24.22.1), pnpm 11.25.0, and Go 1.26.11. Download and verify tools **outside** the repository as documented; the launcher never installs or downloads tools or weakens integrity checks.
+2. Prepare the frozen Vue dependencies and verified Go module cache outside live infrastructure; copy and edit [the example tools configuration](apps/aegis-ui/vue-mvp/local-tools.example.json) into an external `local-tools.json` with absolute local paths.
+3. In PowerShell 7, from the repository root, run the launcher with that external configuration:
+
+```powershell
+& ".\apps\aegis-ui\vue-mvp\start-local.ps1" -ToolsFile "C:\path\to\local-tools.json"
+```
+
+4. Only after `AEGIS LOCAL DEMO — READY` appears, open the **printed** localhost Vue URL. Four disabled mock devices and 12 synthetic backups should appear. Press `Q` or `Ctrl+C` in that terminal to stop the private demo session.
+
+See [verification and limitations](docs/DEMO.md) for the observed Windows walkthrough and the CI-tested Go → Node → Vue flow. No SSH connection or real network configuration is required.
 
 ## Development checks
 
