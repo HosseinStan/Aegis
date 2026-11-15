@@ -1,28 +1,43 @@
-# Evaluating Aegis without a physical Cisco switch
+# Aegis synthetic local demo
 
-Aegis has two distinct public development states. Avoid confusing the stable `main` API with experimental Vue features in draft PRs.
+The **Go → Node → Vue** demo is available on `main` following [PR #17](https://github.com/HosseinStan/Aegis/pull/17), alongside the Go API and the existing standalone HTML/Node reference preview. The local demo remains **pre-release evaluation software**, separate from the production SSH application.
 
-## Current main branch
+> **NO LIVE DEVICE ACCESS. RISK NOT EVALUATED. Phase E DEFERRED / NOT ACCEPTED; production use BLOCKED.** Neither screenshots nor green CI establish hardware or production security acceptance.
 
-- The Go API has automated integration tests using an in-process mock connector, so its core read-only API and backup behavior can be reviewed without real equipment.
-- See [Aegis API verification](../apps/aegis-api/README.md) and the CI workflow. This integration candidate uses the CI-tested Go 1.26.11 toolchain baseline; keep the demo toolchain aligned with this fixed version.
-- The development test console is not an isolated synthetic-device Vue demo. It is not a reason to connect real switches or deploy to production.
+## What it demonstrates
 
-## Synthetic-device Go-backed UI (draft)
+- Dashboard showing **4 disabled mock devices**, **12 synthetic saved snapshots** and **3 device groups**.
+- Read-only device inventory and profile pages, with saved running configurations displayed from disposable Go backup history.
+- Backup History (3 saved versions per device), SHA-256 metadata, timestamped UUIDs, and deep links to the exact saved content.
+- Native Go `BackupService.Diff` comparison: Side-by-side, Unified, Changes Only, Swap and same-snapshot `0/0` comparisons.
+- Change Review that describes saved differences only; **Viewed** is local component state, **never an approval, persistent record or security score**.
 
-- [PR #10](https://github.com/HosseinStan/Aegis/pull/10) contains a standalone Node/HTML preview and a Vue workspace. Its seed provides **four disabled synthetic devices and twelve synthetic saved snapshots** through a disposable SQLite database.
-- [Preview setup](https://github.com/HosseinStan/Aegis/blob/codex/aegis-mvp-preview-20261028/apps/aegis-ui/preview/README.md) documents the isolated Go/Node preview.
-- [Vue setup](https://github.com/HosseinStan/Aegis/blob/codex/aegis-mvp-preview-20261028/apps/aegis-ui/vue-mvp/README.md) documents the Windows launcher and offline dependency requirements.
-- [PR #12](https://github.com/HosseinStan/Aegis/pull/12) adds a separate localhost-only lab manager; it has not been physically tested on switches.
+The demo uses a dedicated `cmd/inventory-demo` Go entrypoint, synthetic fixture generation, disposable SQLite, and a localhost Node bridge to Vue. It does **not** start the production `cmd/server` connector, open a Telnet route, expose arbitrary CLI commands or connect to Cisco devices.
 
-These are development branches, **not merged releases**. The integration candidate uses the current Go 1.26.11 base and has separate Go/Vue checks, but still requires a manual local browser smoke run. The launcher expects externally prepared and verified Go/Node/pnpm toolchains and caches. Do not bypass integrity checks, bind a development service to a public interface, use real corporate config dumps or claim production acceptance.
+## Run locally on Windows
 
-## What a reviewer should see once validated
+1. Follow the maintained [Vue MVP instructions](../apps/aegis-ui/vue-mvp/README.md) for the pinned Node, pnpm and Go versions, download verification, frozen dependencies, and an isolated external tools JSON. Use **PowerShell 7.3+**.
+2. Clone this repository separately from any real Aegis workspace; avoid committing local credentials, backups or network data.
+3. Start the PowerShell launcher with the external config:
 
-A dashboard, device inventory, saved configuration, backup history, native comparison and change-review screens. These operate on synthetic records only. Risk classification remains unverified and production release is blocked. A future tagged preview should provide an accurate reproducible launch script and screenshots from that same validated build.
+```powershell
+& ".\apps\aegis-ui\vue-mvp\start-local.ps1" -ToolsFile "C:\path\to\local-tools.json"
+```
 
-### Synthetic Vue demo integration candidate
+4. Confirm `AEGIS LOCAL DEMO — READY`, `Go API: Healthy`, `Connector: Mock only`, `Dataset: Disposable synthetic SQLite`, and `Device access: Disabled`. Open the printed **127.0.0.1** URL(s). End with `Q` or `Ctrl+C`; the shell prints `AEGIS LOCAL DEMO — STOPPED`.
 
-[PR #17](https://github.com/HosseinStan/Aegis/pull/17) is an independent development branch based on the Apache-2.0 and Go 1.26.11 main baseline. It carries the isolated synthetic Go/Node/Vue demo from PR #10 but leaves the older PR #10/#12 branches unchanged. The Go application does not connect to switches in this demo entrypoint.
+The Windows launcher reuses independently verified Go/Node/pnpm tools and caches: it **does not download or install them**. Do not remove its hash or frozen-lock checks, expose the service on a public network, or replace synthetic data with corporate configuration dumps.
 
-**Go 1.26.11 receipt verified in GitHub Windows CI:** official archive SHA-256 `71ae086f0137e665f855a811cc119152b6a783e0bbc1b906e709f46d80141eb0`, and contained `go.exe` SHA-256 `c0ea949d000a24883f37b1dd2db794a9fb2b824fbcff11facb469615a50ca6af`. The Windows one-command launcher is now pinned to these verified values, so it fails closed on any mismatch. The full launcher and browser flow still require a real Windows smoke run and are **not yet approved as a release**. The CLI-based isolated preview remains a separate evaluation path. No public deployment or production use is authorized.
+## Verification evidence
+
+- [Latest Go, Vue, Windows integrity and synthetic E2E CI](https://github.com/HosseinStan/Aegis/actions/runs/43597913507) completed green on the integrated PR head; the post-merge `main` CI must also pass before cutting a tag.
+- Automated Go → Node → Vue integration validates four disabled mock devices, 12 unique saved backup IDs, HTTP 401 for unauthenticated direct Go inventory access, and HTTP 405 for blocked writes.
+- The maintainer demonstrated the Windows launcher and localhost Overview in Chrome, and supplied screenshots of device search, saved configuration, Backup History filtered to **3** records, native `+2/-2` side-by-side and Unified comparison, Changes Only, same-snapshot `0/0`, and Change Review. Those screenshots are maintained **outside** the public repository at this point.
+- Manual stop output reported `AEGIS LOCAL DEMO — STOPPED`. A dedicated fresh-restart/port-reuse smoke and manual Swap/Viewed-reset observation were not independently supplied; the corresponding unit-level behavior is covered by tests.
+
+## Release and safety limits
+
+- No Go/Vue packaged executable is signed or provided; GitHub source archives, if a pre-release is published, are source only.
+- Lab device manager in [PR #12](https://github.com/HosseinStan/Aegis/pull/12) is not merged. Change-risk classification in [PR #9](https://github.com/HosseinStan/Aegis/pull/9) remains deferred.
+- This repository contains both real-device API code and a **separate synthetic-only demo**. Do not confuse the demo's passing tests with approval to configure, scan or audit production infrastructure.
+- Known limitations: security acceptance, CLI compatibility across device models, production identity integration and backup-at-rest encryption remain unfinished.
