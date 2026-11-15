@@ -66,6 +66,9 @@ jobs:
         env:
           AEGIS_PREVIEW_ORIGIN: http://127.0.0.1:4318
         run: pnpm build
+      - name: Build separate Cisco Lab Vue entry (no hardware)
+        working-directory: apps/aegis-ui/vue-mvp
+        run: pnpm exec vite build --config vite.lab.config.js --outDir "$RUNNER_TEMP/aegis-lab-ui"
       - uses: actions/setup-go@v6
         with:
           go-version: 1.26.11
@@ -125,4 +128,16 @@ jobs:
         run: |
           node --test tests/local-launcher.test.mjs
           node --input-type=module -e "import {readFile} from 'node:fs/promises'; import {samePnpmLockContent} from './launcher/lockfile-integrity.mjs'; const source=await readFile('pnpm-lock.yaml'); const installed=await readFile('node_modules/.pnpm/lock.yaml'); if (!samePnpmLockContent(source,installed)) throw Error('VUE_LOCK_MISMATCH'); console.log('AEGIS_WINDOWS_LOCK_INTEGRITY_PASS');"
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.11
+          cache-dependency-path: apps/aegis-api/go.sum
+      - name: Windows Cisco Lab focused tests and build (no hardware)
+        working-directory: apps/aegis-api
+        shell: pwsh
+        run: |
+          go test ./cmd/lab-manager ./internal/connectors/cisco_ios_ssh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go build -trimpath -o "$env:RUNNER_TEMP/aegis-lab.exe" ./cmd/lab-manager
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
