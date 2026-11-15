@@ -36,3 +36,93 @@ jobs:
         run: go build ./...
       - name: Build container
         run: docker build -f apps/aegis-api/Dockerfile -t aegis-api:ci .
+
+  vue-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+          cache-dependency-path: apps/aegis-ui/vue-mvp/pnpm-lock.yaml
+      - name: Install frozen Vue dependencies
+        working-directory: apps/aegis-ui/vue-mvp
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Unit tests for Vue read-only views and local launcher
+        working-directory: apps/aegis-ui/vue-mvp
+        run: |
+          pnpm test:config
+          pnpm test:history
+          pnpm test:compare
+          pnpm test:review
+          pnpm test:launcher
+      - name: Build synthetic Vue demo
+        working-directory: apps/aegis-ui/vue-mvp
+        env:
+          AEGIS_PREVIEW_ORIGIN: http://127.0.0.1:4318
+        run: pnpm build
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.11
+          cache-dependency-path: apps/aegis-api/go.sum
+      - name: Build mock-only Go backend
+        working-directory: apps/aegis-api
+        env:
+          CGO_ENABLED: '0'
+        run: go build -trimpath -o "$RUNNER_TEMP/aegis-inventory-demo" ./cmd/inventory-demo
+      - name: Synthetic Go Node Vue HTTP smoke
+        working-directory: apps/aegis-ui/vue-mvp
+        run: AEGIS_DEMO_BINARY="$RUNNER_TEMP/aegis-inventory-demo" node tests/integration-smoke.mjs
+
+  windows-sdk-receipt:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify official Go 1.26.11 Windows archive and derive binary SHA-256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = '71ae086f0137e665f855a811cc119152b6a783e0bbc1b906e709f46d80141eb0'
+          $zipPath = Join-Path $env:RUNNER_TEMP 'go1.26.11.windows-amd64.zip'
+          Invoke-WebRequest -Uri 'https://go.dev/dl/go1.26.11.windows-amd64.zip' -OutFile $zipPath
+          $actual = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'Official Go archive checksum mismatch' }
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $entry = $archive.GetEntry('go/bin/go.exe')
+            if ($null -eq $entry) { throw 'go.exe not found inside verified archive' }
+            $stream = $entry.Open()
+            try {
+              $sha = [System.Security.Cryptography.SHA256]::Create()
+              try { $exeHash = [Convert]::ToHexString($sha.ComputeHash($stream)).ToLowerInvariant() }
+              finally { $sha.Dispose() }
+            }
+            finally { $stream.Dispose() }
+          }
+          finally { $archive.Dispose() }
+          Write-Output "Verified archive SHA256=$actual"
+          Write-Output "Verified go.exe SHA256=$exeHash"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Install Windows frozen Vue dependencies
+        working-directory: apps/aegis-ui/vue-mvp
+        shell: pwsh
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify installed Windows pnpm lockfile matches tracked content
+        working-directory: apps/aegis-ui/vue-mvp
+        shell: pwsh
+        run: |
+          node --test tests/local-launcher.test.mjs
+          node --input-type=module -e "import {readFile} from 'node:fs/promises'; import {samePnpmLockContent} from './launcher/lockfile-integrity.mjs'; const source=await readFile('pnpm-lock.yaml'); const installed=await readFile('node_modules/.pnpm/lock.yaml'); if (!samePnpmLockContent(source,installed)) throw Error('VUE_LOCK_MISMATCH'); console.log('AEGIS_WINDOWS_LOCK_INTEGRITY_PASS');"
+

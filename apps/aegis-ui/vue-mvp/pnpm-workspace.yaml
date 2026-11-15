@@ -1,0 +1,5 @@
+packages:
+  - '.'
+autoInstallPeers: false
+ignoreScripts: true
+verifyDepsBeforeRun: error
