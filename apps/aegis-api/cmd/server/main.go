@@ -92,6 +92,7 @@ func run() error {
 	handler := &api.Handler{Auth: authService, Credentials: credentialStore, Devices: deviceService, Configs: configService, Backups: backupService, Audits: store, Health: store, Logger: logger, OpenAPIPath: cfg.OpenAPIPath, TrustedProxies: trustedProxies}
 	handler.ChangeAuthorizations = services.NewChangeAuthorizationService(store, store, store, store, store)
 	handler.ChangePolicies = services.NewChangePolicyService(store, store, store)
+	handler.ChangeRisks = services.NewChangeRiskService(store)
 	router := api.Routes(handler, metrics, api.RouterConfig{AllowedOrigins: cfg.CORSAllowedOrigins, RequestTimeout: cfg.RequestTimeout, MetricsEnabled: cfg.MetricsEnabled, TestConsoleEnabled: cfg.LocalTestConsoleEnabled, TrustedProxyCIDRs: cfg.TrustedProxyCIDRs})
 	server := &http.Server{Addr: cfg.ListenAddress, Handler: router, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: cfg.RequestTimeout, WriteTimeout: cfg.RequestTimeout + 5*time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20, ErrorLog: slog.NewLogLogger(logger.Handler(), slog.LevelError)}
 

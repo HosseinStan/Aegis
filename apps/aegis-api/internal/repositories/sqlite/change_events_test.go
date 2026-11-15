@@ -57,6 +57,30 @@ func eventBetween(from, to domain.ConfigBackup) domain.ChangeEvent {
 		PolicyStatus: domain.PolicyStatusNotEvaluated, CreatedAt: to.CreatedAt, UpdatedAt: to.CreatedAt}
 }
 
+func assertApprovedTaskSixMigrations(t *testing.T, db *sql.DB) {
+	t.Helper()
+	rows, err := db.Query(`SELECT version FROM schema_migrations ORDER BY version`)
+	require.NoError(t, err)
+	defer rows.Close()
+	var actual []string
+	for rows.Next() {
+		var version string
+		require.NoError(t, rows.Scan(&version))
+		actual = append(actual, version)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, []string{
+		"001_initial.sql",
+		"002_seed_rbac.sql",
+		"003_change_events.sql",
+		"004_change_event_items.sql",
+		"005_change_item_classification.sql",
+		"006_change_authorizations.sql",
+		"007_change_policy_evaluations.sql",
+		"008_change_risk_assessments.sql",
+	}, actual, "exact approved migration identities; no missing or extra migrations")
+}
+
 func TestChangeEventMigrationUpgradePreservesHistoricalBackups(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "existing.db")
@@ -90,9 +114,7 @@ func TestChangeEventMigrationUpgradePreservesHistoricalBackups(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, items)
 	require.Zero(t, total) // Structure only; historical backups are not backfilled.
-	var count int
-	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count))
-	require.Equal(t, 7, count)
+	assertApprovedTaskSixMigrations(t, s.db)
 }
 
 func TestChangeEventRepositoryReadsAndFilters(t *testing.T) {

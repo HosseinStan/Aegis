@@ -17,7 +17,152 @@ tags:
   - name: Credentials
   - name: Audit
   - name: Change Policies
+  - name: Change Risk
 paths:
+  /api/v1/devices/{deviceID}/change-events/{eventID}/risk-assessment/preview:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/EventID'}
+    post:
+      tags: [Change Risk]
+      summary: Preview live potential impact and human review priority
+      description: >-
+        Every operation requires live devices.read, backups.read, changes.authorization.read, changes.policy.read, changes.risk.read and current device-group access, plus an enabled actor. Middleware is supplementary to same-transaction backend checks. Live, unrecorded metadata-only preview. historical=false. No evidence or registry writes. UNKNOWN is not LOW; completeness is limited to the model contract. No source configuration, commands, context paths, binding sidecars or secret material is returned. Potential impact is advisory, never approval or full-device security.
+      requestBody:
+        required: false
+        description: Empty body or one strict JSON object, at most 4096 bytes including whitespace. Nonempty bodies require application/json (UTF-8). Duplicate, unknown, trailing keys/values and caller evidence/result/actor/impact/priority are rejected.
+        content: {application/json: {schema: {$ref: '#/components/schemas/RiskPreviewRequest'}}}
+      responses:
+        '200': {$ref: '#/components/responses/RiskPreviewResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/RiskConflict'}
+        '500': {$ref: '#/components/responses/RiskIntegrity'}
+        '503': {$ref: '#/components/responses/RiskUnavailable'}
+        '415': {$ref: '#/components/responses/RiskUnsupportedMediaType'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/risk-assessment:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/EventID'}
+    post:
+      tags: [Change Risk]
+      summary: Record an immutable assessment or verify a retry
+      description: >-
+        Every operation requires live devices.read, backups.read, changes.authorization.read, changes.policy.read, changes.risk.read and current device-group access, plus an enabled actor. Middleware is supplementary to same-transaction backend checks. Additionally requires changes.risk.evaluate AND changes.risk.read, including verified retries. Missing/null expectation creates R1 only when no latest exists; may retry an unchanged R1. Exact latest ID is required for changed evidence. Unchanged latest permits latest or immediate-predecessor expectation (verified lost-response retry). Other expectations conflict. 201/200 require confirmed COMMIT and a fresh atomic change_risk.evaluate audit; audit failure is non-2xx. No automatic cached retry or caller result. No source configuration, commands, context paths, binding sidecars or secret material is returned. Potential impact is advisory, never approval or full-device security.
+      requestBody:
+        required: false
+        description: Empty body or one strict JSON object, at most 4096 bytes including whitespace. Nonempty bodies require application/json (UTF-8). Duplicate, unknown, trailing keys/values and caller evidence/result/actor/impact/priority are rejected.
+        content: {application/json: {schema: {$ref: '#/components/schemas/RiskAssessmentRequest'}}}
+      responses:
+        '200': {$ref: '#/components/responses/RiskRecordResponse'}
+        '201': {$ref: '#/components/responses/RiskRecordResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/RiskConflict'}
+        '500': {$ref: '#/components/responses/RiskIntegrity'}
+        '503': {$ref: '#/components/responses/RiskUnavailable'}
+        '415': {$ref: '#/components/responses/RiskUnsupportedMediaType'}
+    get:
+      tags: [Change Risk]
+      summary: Read latest recorded historical assessment
+      description: >-
+        Every operation requires live devices.read, backups.read, changes.authorization.read, changes.policy.read, changes.risk.read and current device-group access, plus an enabled actor. Middleware is supplementary to same-transaction backend checks. Latest recorded is historical=true, NOT current governance or a live security assurance. Replayed and live-authorized, never rescored. No source configuration, commands, context paths, binding sidecars or secret material is returned. Potential impact is advisory, never approval or full-device security.
+      responses:
+        '200': {$ref: '#/components/responses/RiskAssessmentResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/RiskConflict'}
+        '500': {$ref: '#/components/responses/RiskIntegrity'}
+        '503': {$ref: '#/components/responses/RiskUnavailable'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/risk-assessment/findings:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/EventID'}
+    get:
+      tags: [Change Risk]
+      summary: Page findings of a pinned latest historical assessment
+      description: >-
+        Every operation requires live devices.read, backups.read, changes.authorization.read, changes.policy.read, changes.risk.read and current device-group access, plus an enabled actor. Middleware is supplementary to same-transaction backend checks. Resolves latest once in the same snapshot; meta.assessment_id pins the record. Continue with revision-specific findings when latest changes. Ordinal ASC. No source configuration, commands, context paths, binding sidecars or secret material is returned. Potential impact is advisory, never approval or full-device security.
+      parameters:
+        - {$ref: '#/components/parameters/RiskLimit'}
+        - {$ref: '#/components/parameters/RiskOffset'}
+      responses:
+        '200': {$ref: '#/components/responses/RiskFindingsResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/RiskConflict'}
+        '500': {$ref: '#/components/responses/RiskIntegrity'}
+        '503': {$ref: '#/components/responses/RiskUnavailable'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/risk-assessments:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/EventID'}
+    get:
+      tags: [Change Risk]
+      summary: Page recorded historical revisions
+      description: >-
+        Every operation requires live devices.read, backups.read, changes.authorization.read, changes.policy.read, changes.risk.read and current device-group access, plus an enabled actor. Middleware is supplementary to same-transaction backend checks. Replayed historical summaries in revision DESC order, not current rescoring. Only limit/offset query parameters are accepted; no filters. No source configuration, commands, context paths, binding sidecars or secret material is returned. Potential impact is advisory, never approval or full-device security.
+      parameters:
+        - {$ref: '#/components/parameters/RiskLimit'}
+        - {$ref: '#/components/parameters/RiskOffset'}
+      responses:
+        '200': {$ref: '#/components/responses/RiskHistoryResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/RiskConflict'}
+        '500': {$ref: '#/components/responses/RiskIntegrity'}
+        '503': {$ref: '#/components/responses/RiskUnavailable'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/risk-assessments/{assessmentID}:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/EventID'}
+      - {$ref: '#/components/parameters/RiskAssessmentID'}
+    get:
+      tags: [Change Risk]
+      summary: Read exact scoped historical revision
+      description: >-
+        Every operation requires live devices.read, backups.read, changes.authorization.read, changes.policy.read, changes.risk.read and current device-group access, plus an enabled actor. Middleware is supplementary to same-transaction backend checks. Historical=true. Foreign assessment/event/device IDs are scoped missing resources, not cross-device evidence. Full historical replay required. No source configuration, commands, context paths, binding sidecars or secret material is returned. Potential impact is advisory, never approval or full-device security.
+      responses:
+        '200': {$ref: '#/components/responses/RiskAssessmentResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/RiskConflict'}
+        '500': {$ref: '#/components/responses/RiskIntegrity'}
+        '503': {$ref: '#/components/responses/RiskUnavailable'}
+  /api/v1/devices/{deviceID}/change-events/{eventID}/risk-assessments/{assessmentID}/findings:
+    parameters:
+      - {$ref: '#/components/parameters/DeviceID'}
+      - {$ref: '#/components/parameters/EventID'}
+      - {$ref: '#/components/parameters/RiskAssessmentID'}
+    get:
+      tags: [Change Risk]
+      summary: Page exact historical revision findings
+      description: >-
+        Every operation requires live devices.read, backups.read, changes.authorization.read, changes.policy.read, changes.risk.read and current device-group access, plus an enabled actor. Middleware is supplementary to same-transaction backend checks. Historical=true; stable ordinal ASC paging and meta.assessment_id. Foreign assessment IDs return scoped 404. No source configuration, commands, context paths, binding sidecars or secret material is returned. Potential impact is advisory, never approval or full-device security.
+      parameters:
+        - {$ref: '#/components/parameters/RiskLimit'}
+        - {$ref: '#/components/parameters/RiskOffset'}
+      responses:
+        '200': {$ref: '#/components/responses/RiskFindingsResponse'}
+        '400': {$ref: '#/components/responses/ValidationFailed'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/RiskConflict'}
+        '500': {$ref: '#/components/responses/RiskIntegrity'}
+        '503': {$ref: '#/components/responses/RiskUnavailable'}
   /api/v1/devices/{deviceID}/change-policies:
     parameters:
       - {$ref: '#/components/parameters/DeviceID'}
@@ -618,6 +763,9 @@ components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
   parameters:
+    RiskAssessmentID: {name: assessmentID, in: path, required: true, schema: {type: string, format: uuid}}
+    RiskLimit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+    RiskOffset: {name: offset, in: query, schema: {type: integer, minimum: 0, maximum: 10000, default: 0}}
     PolicyID: {name: policyID, in: path, required: true, schema: {type: string, format: uuid}}
     DeviceID: {name: deviceID, in: path, required: true, schema: {type: string, format: uuid}}
     CredentialID: {name: credentialID, in: path, required: true, schema: {type: string, format: uuid}}
@@ -628,6 +776,20 @@ components:
     Offset: {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
     Refresh: {name: refresh, in: query, schema: {type: boolean, default: false}}
   schemas:
+    RiskPreviewRequest: {"type":"object","additionalProperties":false,"properties":{}}
+    RiskAssessmentRequest: {"type":"object","additionalProperties":false,"properties":{"expected_latest_assessment_id":{"type":["string","null"],"format":"uuid","description":"Canonical lowercase, nonzero UUID or null. Omitted/null root expectation; never a caller result."}}}
+    RiskFinding: {"type":"object","additionalProperties":false,"required":["ordinal","key","rule_id","reason_code","kind","subject","item_ordinal","impact","priority_floor","parameters"],"properties":{"ordinal":{"type":"integer","minimum":0,"readOnly":true},"key":{"type":"string"},"rule_id":{"type":"string"},"reason_code":{"type":"string"},"kind":{"type":"string","enum":["technical","governance","uncertainty","summary"]},"subject":{"type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"type":"string","enum":["item","event","authorization","policy"]},"id":{"type":"string","format":"uuid","readOnly":true}}},"item_ordinal":{"type":["integer","null"],"minimum":0},"impact":{"type":["string","null"],"enum":["unknown","low","medium","high",null]},"priority_floor":{"type":["string","null"],"enum":["normal","elevated","urgent",null]},"parameters":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name","kind","enum_value","int_value","uuid_value"],"properties":{"name":{"type":"string"},"kind":{"type":"string","enum":["enum","int","uuid"]},"enum_value":{"type":["string","null"]},"int_value":{"type":["integer","null"]},"uuid_value":{"type":["string","null"],"format":"uuid"}}}}}}
+    RiskResultSummary: {"type":"object","additionalProperties":false,"required":["technical_impact","known_impact_floor","evidence_completeness","review_priority","total_items","known_items","unknown_items","distinct_known_categories","finding_count","governance_findings"],"properties":{"technical_impact":{"type":"string","enum":["unknown","low","medium","high"],"readOnly":true},"known_impact_floor":{"type":["string","null"],"enum":["low","medium","high",null],"readOnly":true},"evidence_completeness":{"type":"string","enum":["complete","partial"],"readOnly":true},"review_priority":{"type":"string","enum":["normal","elevated","urgent"],"readOnly":true},"total_items":{"type":"integer","minimum":0,"readOnly":true},"known_items":{"type":"integer","minimum":0,"readOnly":true},"unknown_items":{"type":"integer","minimum":0,"readOnly":true},"distinct_known_categories":{"type":"integer","minimum":0,"readOnly":true},"finding_count":{"type":"integer","minimum":0,"readOnly":true},"governance_findings":{"type":"array","items":{"$ref":"#/components/schemas/RiskFinding"},"readOnly":true}}}
+    RiskPreviewResult: {"type":"object","additionalProperties":false,"required":["technical_impact","known_impact_floor","evidence_completeness","review_priority","total_items","known_items","unknown_items","distinct_known_categories","findings"],"properties":{"technical_impact":{"type":"string","enum":["unknown","low","medium","high"],"readOnly":true},"known_impact_floor":{"type":["string","null"],"enum":["low","medium","high",null],"readOnly":true},"evidence_completeness":{"type":"string","enum":["complete","partial"],"readOnly":true},"review_priority":{"type":"string","enum":["normal","elevated","urgent"],"readOnly":true},"total_items":{"type":"integer","minimum":0,"readOnly":true},"known_items":{"type":"integer","minimum":0,"readOnly":true},"unknown_items":{"type":"integer","minimum":0,"readOnly":true},"distinct_known_categories":{"type":"integer","minimum":0,"readOnly":true},"findings":{"type":"array","maxItems":10016,"items":{"$ref":"#/components/schemas/RiskFinding"},"readOnly":true}}}
+    RiskAssessment: {"type":"object","additionalProperties":false,"required":["id","event_id","device_id","config_type","revision","previous_assessment_id","model_version","evidence_schema_version","definition_hash","evidence_hash","result_hash","captured_at","assessed_by","historical","result"],"properties":{"id":{"type":"string","format":"uuid","readOnly":true},"event_id":{"type":"string","format":"uuid","readOnly":true},"device_id":{"type":"string","format":"uuid","readOnly":true},"config_type":{"type":"string","enum":["running","startup"],"readOnly":true},"revision":{"type":"integer","minimum":1,"readOnly":true},"previous_assessment_id":{"type":["string","null"],"format":"uuid","readOnly":true},"model_version":{"type":"integer","enum":[1],"readOnly":true},"evidence_schema_version":{"type":"integer","enum":[1],"readOnly":true},"definition_hash":{"type":"string","pattern":"^[a-f0-9]{64}$","readOnly":true},"evidence_hash":{"type":"string","pattern":"^[a-f0-9]{64}$","readOnly":true},"result_hash":{"type":"string","pattern":"^[a-f0-9]{64}$","readOnly":true},"captured_at":{"type":"string","format":"date-time","readOnly":true},"assessed_by":{"type":"string","format":"uuid","readOnly":true},"historical":{"type":"boolean","enum":[true],"readOnly":true},"result":{"$ref":"#/components/schemas/RiskResultSummary"}}}
+    RiskRecord: {"type":"object","additionalProperties":false,"required":["created","assessment"],"properties":{"created":{"type":"boolean","readOnly":true},"assessment":{"$ref":"#/components/schemas/RiskAssessment"}}}
+    RiskPreview: {"type":"object","additionalProperties":false,"required":["model_version","historical","eligibility","result"],"properties":{"model_version":{"type":"integer","enum":[1],"readOnly":true},"historical":{"type":"boolean","enum":[false],"readOnly":true},"eligibility":{"type":"object","additionalProperties":false,"required":["persistable","reasons"],"properties":{"persistable":{"type":"boolean"},"reasons":{"type":"array","items":{"type":"string"}}}},"result":{"$ref":"#/components/schemas/RiskPreviewResult"}}}
+    RiskMeta: {"type":"object","additionalProperties":false,"required":["request_id"],"properties":{"request_id":{"type":"string","format":"uuid","readOnly":true},"historical":{"type":"boolean","enum":[true]},"assessment_id":{"type":"string","format":"uuid","readOnly":true},"pagination":{"type":"object","additionalProperties":false,"required":["limit","offset","total"],"properties":{"limit":{"type":"integer","minimum":1,"maximum":200,"default":50},"offset":{"type":"integer","minimum":0,"maximum":10000,"default":0},"total":{"type":"integer","minimum":0,"readOnly":true}}}}}
+    RiskPreviewEnvelope: {"type":"object","additionalProperties":false,"required":["data","meta"],"properties":{"data":{"$ref":"#/components/schemas/RiskPreview"},"meta":{"$ref":"#/components/schemas/RiskMeta"}}}
+    RiskRecordEnvelope: {"type":"object","additionalProperties":false,"required":["data","meta"],"properties":{"data":{"$ref":"#/components/schemas/RiskRecord"},"meta":{"$ref":"#/components/schemas/RiskMeta"}}}
+    RiskAssessmentEnvelope: {"type":"object","additionalProperties":false,"required":["data","meta"],"properties":{"data":{"$ref":"#/components/schemas/RiskAssessment"},"meta":{"$ref":"#/components/schemas/RiskMeta"}}}
+    RiskHistoryEnvelope: {"type":"object","additionalProperties":false,"required":["data","meta"],"properties":{"data":{"type":"array","items":{"$ref":"#/components/schemas/RiskAssessment"}},"meta":{"$ref":"#/components/schemas/RiskMeta"}}}
+    RiskFindingsEnvelope: {"type":"object","additionalProperties":false,"required":["data","meta"],"properties":{"data":{"type":"array","items":{"$ref":"#/components/schemas/RiskFinding"}},"meta":{"$ref":"#/components/schemas/RiskMeta"}}}
     PolicyEmptyAction:
       type: object
       additionalProperties: false
@@ -945,6 +1107,15 @@ components:
             message: {type: string}
             request_id: {type: string, format: uuid}
   responses:
+    RiskPreviewResponse: {"description":"Verified live, unrecorded metadata-only preview","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RiskPreviewEnvelope"}}}}
+    RiskRecordResponse: {"description":"Confirmed creation (201) or verified retry (200), including a fresh atomic action audit","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RiskRecordEnvelope"}}}}
+    RiskAssessmentResponse: {"description":"Verified recorded historical assessment, not current governance","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RiskAssessmentEnvelope"}}}}
+    RiskHistoryResponse: {"description":"Verified historical revision summaries in revision DESC order","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RiskHistoryEnvelope"}}}}
+    RiskFindingsResponse: {"description":"Verified ordinal findings with pinned assessment ID","content":{"application/json":{"schema":{"$ref":"#/components/schemas/RiskFindingsEnvelope"}}}}
+    RiskConflict: {"description":"Stale CAS (CONFLICT), unsupported evidence (RISK_EVIDENCE_UNSUPPORTED), or assessment limit (RISK_ASSESSMENT_LIMIT). No new committed evidence.","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
+    RiskIntegrity: {"description":"RISK_INTEGRITY_FAILURE: corrupt source or historical evidence. No SQL or source diagnostics.","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
+    RiskUnavailable: {"description":"With a live parent request: HTTP 503 JSON RISK_UNAVAILABLE for database busy/unsafe/unavailable, required audit failure, service-side cancellation/deadline or bounded admission overload. The existing global server deadline instead returns HTTP 503 JSON COMMAND_TIMEOUT. A genuinely canceled client/parent transport cannot be guaranteed a JSON body; Go http.TimeoutHandler may return 503 with no body only in that canceled-context case. This exception does not apply to live-request service unavailability. No successful result is asserted.","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}}
+    RiskUnsupportedMediaType: {"description":"HTTP 415 UNSUPPORTED_MEDIA_TYPE: Unsupported request content type. The existing text/plain guard rejects before risk handlers. Exact scoped risk POSTs use the standard safe JSON Error envelope and server request_id; never echo request body or raw media type. Other strict-decoder validation remains HTTP 400.","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"},"example":{"error":{"code":"UNSUPPORTED_MEDIA_TYPE","message":"Unsupported request content type.","request_id":"11111111-1111-4111-8111-111111111111"}}}}}
     PolicySetResponse: {description: Immutable scoped policy definition and lifecycle, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/PolicySet'}}}]}}}}
     PolicySetListResponse: {description: Paginated scoped immutable policies, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/PolicySet'}}}}]}}}}
     PolicyPreviewResponse: {description: Read-only deterministic preview and existing final evidence if any, content: {application/json: {schema: {allOf: [{$ref: '#/components/schemas/DataEnvelope'}, {type: object, properties: {data: {$ref: '#/components/schemas/PolicyEvaluationPreview'}}}]}}}}
